@@ -8,17 +8,17 @@ use structopt::StructOpt;
 #[structopt(name = "keylight")]
 enum KeyLightCli {
     On {
-        #[structopt(long = "brightness", default_value = "10")]
+        #[structopt(short = "b", long = "brightness", default_value = "10")]
         brightness: u8,
 
-        #[structopt(long = "temperature", default_value = "3000")]
+        #[structopt(short = "t", long = "temperature", default_value = "3000")]
         temperature: u32,
 
-        #[structopt(long = "ip-address", default_value = "192.168.0.16")]
+        #[structopt(short = "i", long = "ip-address", default_value = "192.168.0.16")]
         ip_address: String,
     },
     Off {
-        #[structopt(long = "ip-address", default_value = "192.168.0.16")]
+        #[structopt(short = "i", long = "ip-address", default_value = "192.168.0.16")]
         ip_address: String,
     },
 }

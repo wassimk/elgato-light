@@ -16,7 +16,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let args = KeyLightCli::from_args();
 
     let ip = Ipv4Addr::from_str("192.168.0.16")?;
-    let mut kl = KeyLight::new_from_ip("Key Light Air", ip, None).await?;
+    let mut kl = KeyLight::new_from_ip("Ring Light", ip, None).await?;
 
     match args {
         KeyLightCli::On => {

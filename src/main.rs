@@ -17,7 +17,10 @@ enum KeyLightCli {
         #[structopt(long = "ip-address", default_value = "192.168.0.16")]
         ip_address: String,
     },
-    Off,
+    Off {
+        #[structopt(long = "ip-address", default_value = "192.168.0.16")]
+        ip_address: String,
+    },
 }
 
 #[tokio::main]
@@ -40,8 +43,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let status = kl.get().await?;
             println!("{:?}", status);
         }
-        KeyLightCli::Off => {
-            let ip = Ipv4Addr::from_str("192.168.0.16")?;
+        KeyLightCli::Off { ip_address } => {
+            let ip = Ipv4Addr::from_str(&ip_address)?;
             let mut kl = KeyLight::new_from_ip("Ring Light", ip, None).await?;
 
             kl.set_power(false).await?;
@@ -53,3 +56,4 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
+

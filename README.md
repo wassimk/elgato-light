@@ -18,5 +18,5 @@ keylight off
 You can specify if parameters:
 ```shell
 keylight on --ip-address 192.168.0.16 --brightness 10 --temperature 3000
-keylight of --ip-address 192.168.0.16
+keylight off --ip-address 192.168.0.16
 ```

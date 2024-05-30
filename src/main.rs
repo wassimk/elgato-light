@@ -39,21 +39,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
             kl.set_power(true).await?;
             kl.set_brightness(brightness).await?;
             kl.set_temperature(temperature).await?;
-
-            let status = kl.get().await?;
-            println!("{:?}", status);
         }
         KeyLightCli::Off { ip_address } => {
             let ip = Ipv4Addr::from_str(&ip_address)?;
             let mut kl = KeyLight::new_from_ip("Ring Light", ip, None).await?;
 
             kl.set_power(false).await?;
-
-            let status = kl.get().await?;
-            println!("{:?}", status);
         }
     }
 
     Ok(())
 }
-

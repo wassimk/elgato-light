@@ -15,9 +15,15 @@ keylight on
 keylight off
 ```
 
-You can specify the action settings via CLI arguments.
+Specify the action settings via CLI arguments.
 
 ```shell
 keylight on --ip-address 192.168.0.16 --brightness 10 --temperature 3000
 keylight off --ip-address 192.168.0.16
+```
+
+Also, it supports increasing or decreasing the brightness by a percentage.
+```shell
+keylight brightness 10 --ip-address 192.168.0.16
+keylight brightness -10 --ip-address 192.168.0.16
 ```

@@ -23,10 +23,18 @@ enum KeyLightCli {
         #[structopt(short = "i", long = "ip-address", default_value = "192.168.0.16")]
         ip_address: String,
     },
-    #[structopt(about = "Changes the brightness of the keylight")]
+    #[structopt(about = "Changes the brightness of the keylight by percentage (-100 to 100)")]
     Brightness {
         #[structopt(short = "b", long = "brightness")]
         brightness: i8,
+
+        #[structopt(short = "i", long = "ip-address", default_value = "192.168.0.16")]
+        ip_address: String,
+    },
+    #[structopt(about = "Sets the temperature of the keylight")]
+    Temperature {
+        #[structopt(short = "t", long = "temperature")]
+        temperature: u32,
 
         #[structopt(short = "i", long = "ip-address", default_value = "192.168.0.16")]
         ip_address: String,
@@ -65,6 +73,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
             let relative_brightness = brightness as f64 / 100.0;
             kl.set_relative_brightness(relative_brightness).await?;
+        }
+        KeyLightCli::Temperature {
+            temperature,
+            ip_address,
+        } => {
+            let ip = Ipv4Addr::from_str(&ip_address)?;
+            let mut kl = KeyLight::new_from_ip("Ring Light", ip, None).await?;
+
+            kl.set_temperature(temperature).await?;
         }
     }
 

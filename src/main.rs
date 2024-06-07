@@ -51,19 +51,20 @@ enum KeyLightCli {
 }
 
 impl KeyLightCli {
-    fn ip_address(&self) -> &str {
-        match self {
+    fn ip_address(&self) -> Result<Ipv4Addr, Box<dyn Error>> {
+        let ip_str = match self {
             KeyLightCli::On { ip_address, .. } => ip_address,
             KeyLightCli::Off { ip_address } => ip_address,
             KeyLightCli::Brightness { ip_address, .. } => ip_address,
             KeyLightCli::Temperature { ip_address, .. } => ip_address,
             KeyLightCli::Status { ip_address } => ip_address,
-        }
+        };
+
+        Ipv4Addr::from_str(ip_str).map_err(|_| "Invalid IP address format".into())
     }
 }
 
-async fn get_keylight(ip_address: &str) -> Result<KeyLight, Box<dyn Error>> {
-    let ip_address = Ipv4Addr::from_str(ip_address).map_err(|_| "Invalid IP address format")?;
+async fn get_keylight(ip_address: Ipv4Addr) -> Result<KeyLight, Box<dyn Error>> {
     let keylight = KeyLight::new_from_ip("Ring Light", ip_address, None).await?;
     Ok(keylight)
 }
@@ -71,7 +72,7 @@ async fn get_keylight(ip_address: &str) -> Result<KeyLight, Box<dyn Error>> {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let args = KeyLightCli::from_args();
-    let ip_address = args.ip_address();
+    let ip_address = args.ip_address()?;
     let mut keylight = get_keylight(ip_address).await?;
 
     match args {

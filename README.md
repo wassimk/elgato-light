@@ -8,7 +8,7 @@ During troubleshooting, I learned it always has an IP address and never loses a 
 
 ### Usage
 
-It's a simple CLI tool with my IP address, brightness, and temperature hard-coded as the defaults.
+It's a CLI tool with my IP address, brightness, and temperature hard-coded as the defaults.
 
 ```shell
 keylight on
@@ -18,12 +18,28 @@ keylight off
 Specify the action settings via CLI arguments.
 
 ```shell
-keylight on --ip-address 192.168.0.16 --brightness 10 --temperature 3000
-keylight off --ip-address 192.168.0.16
+keylight on --ip-address 192.168.0.25 --brightness 10 --temperature 3000
+keylight off --ip-address 192.168.0.25
 ```
 
-Also, it supports increasing or decreasing the brightness by a percentage.
+Also, it supports increasing or decreasing the brightness.
+
 ```shell
-keylight brightness 10 --ip-address 192.168.0.16
-keylight brightness -10 --ip-address 192.168.0.16
+keylight brightness 10 --ip-address 192.168.0.25
+keylight brightness -- -10 --ip-address 192.168.0.25
 ```
+
+And the temperature can be set, between 2900 and 7000.
+
+```shell
+keylight temperature 5000 --ip-address 192.168.0.25
+```
+
+If the light is off when setting brightness or temperature, it will turn on.
+
+Get the status for troubleshooting.
+
+```shell
+keylight status
+```
+

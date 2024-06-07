@@ -1,0 +1,63 @@
+name: release
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  release:
+    name: Release - ${{ matrix.platform.release_for }}
+    strategy:
+      matrix:
+        platform:
+          - release_for: macOS-x86_64
+            os: macOS-latest
+            target: x86_64-apple-darwin
+            bin: elgato-light-cli
+            name: elgato-light-cli-Darwin-x86_64.tar.gz
+
+          - release_for: macOS-aarch64
+            os: macOS-latest
+            target: aarch64-apple-darwin
+            bin: elgato-light-cli
+            name: elgato-light-cli-Darwin-aarch64.tar.gz
+
+    runs-on: ${{ matrix.platform.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Build binary
+        uses: houseabsolute/actions-rust-cross@v0
+        with:
+          command: ${{ matrix.platform.command }}
+          target: ${{ matrix.platform.target }}
+          args: "--locked --release"
+          strip: true
+
+      - name: Package as archive
+        shell: bash
+        run: |
+          cd target/${{ matrix.platform.target }}/release
+          if [[ "${{ matrix.platform.os }}" == "windows-latest" ]]; then
+            7z a ../../../${{ matrix.platform.name }} ${{ matrix.platform.bin }}
+          else
+            tar czvf ../../../${{ matrix.platform.name }} ${{ matrix.platform.bin }}
+          fi
+          cd -
+
+      - name: Publish release artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: elgato-light-cli-${{ matrix.platform.os_name }}
+          path: "elgato-light-cli-*"
+
+      - name: Generate SHA-256
+        run: shasum -a 256 ${{ matrix.platform.name }}
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: "elgato-light-cli*"

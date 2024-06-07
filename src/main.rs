@@ -101,23 +101,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
         KeyLightCli::Brightness { brightness, .. } => {
             let status = keylight.get().await?;
             let current_brightness = status.lights[0].brightness;
-            match brightness {
-                BrightnessArg::Increase(brightness) => {
-                    let new_brightness =
-                        ((current_brightness as i8) + brightness).clamp(0, 100) as u8;
-                    println!("Increasing brightness to {}", new_brightness);
-                    keylight.set_brightness(new_brightness).await?;
+            let new_brightness = match brightness {
+                BrightnessArg::Increase(value) => {
+                    ((current_brightness as i8) + value).clamp(0, 100) as u8
                 }
-                BrightnessArg::Decrease(brightness) => {
-                    if let Ok(brightness) = brightness.parse::<i8>() {
-                        let new_brightness =
-                            ((current_brightness as i8) + brightness).clamp(0, 100) as u8;
-                        keylight.set_brightness(new_brightness).await?;
-                    } else {
-                        println!("Invalid brightness value");
-                    }
+                BrightnessArg::Decrease(value) => {
+                    let decrease_value = value.parse::<i8>().unwrap_or(0);
+                    ((current_brightness as i8) + decrease_value).clamp(0, 100) as u8
                 }
-            }
+            };
+            keylight.set_brightness(new_brightness).await?;
         }
         KeyLightCli::Temperature { temperature, .. } => {
             keylight.set_temperature(temperature).await?;

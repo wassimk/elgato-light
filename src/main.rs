@@ -59,6 +59,11 @@ enum KeyLightCli {
         #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS)]
         ip_address: String,
     },
+    #[structopt(about = "Gets the status of the keylight")]
+    Status {
+        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS)]
+        ip_address: String,
+    },
 }
 
 async fn get_keylight(ip_address: String) -> Result<KeyLight, Box<dyn Error>> {
@@ -75,6 +80,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         KeyLightCli::Off { ref ip_address } => ip_address.clone(),
         KeyLightCli::Brightness { ref ip_address, .. } => ip_address.clone(),
         KeyLightCli::Temperature { ref ip_address, .. } => ip_address.clone(),
+        KeyLightCli::Status { ref ip_address } => ip_address.clone(),
     };
 
     let mut keylight = get_keylight(ip_address).await?;
@@ -115,6 +121,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
         KeyLightCli::Temperature { temperature, .. } => {
             keylight.set_temperature(temperature).await?;
+        }
+        KeyLightCli::Status { .. } => {
+            let status = keylight.get().await?;
+            println!("{:?}", status);
         }
     }
 

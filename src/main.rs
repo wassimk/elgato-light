@@ -69,6 +69,14 @@ async fn get_keylight(ip_address: Ipv4Addr) -> Result<KeyLight, Box<dyn Error>> 
     Ok(keylight)
 }
 
+async fn ensure_light_on(keylight: &mut KeyLight) -> Result<(), Box<dyn Error>> {
+    let status = keylight.get().await?;
+    if status.lights[0].on == 0 {
+        keylight.set_power(true).await?;
+    }
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let args = KeyLightCli::from_args();
@@ -89,21 +97,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
             keylight.set_power(false).await?;
         }
         KeyLightCli::Brightness { brightness, .. } => {
+            ensure_light_on(&mut keylight).await?;
             let status = keylight.get().await?;
-            if status.lights[0].on == 0 {
-                keylight.set_power(true).await?;
-            }
-
             let current_brightness = status.lights[0].brightness;
             let new_brightness = ((current_brightness as i8) + brightness).clamp(0, 100) as u8;
             keylight.set_brightness(new_brightness).await?;
         }
         KeyLightCli::Temperature { temperature, .. } => {
-            let status = keylight.get().await?;
-            if status.lights[0].on == 0 {
-                keylight.set_power(true).await?;
-            }
-
+            ensure_light_on(&mut keylight).await?;
             keylight.set_temperature(temperature).await?;
         }
         KeyLightCli::Status { .. } => {

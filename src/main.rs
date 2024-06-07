@@ -6,6 +6,24 @@ use structopt::StructOpt;
 
 const DEFAULT_IP_ADDRESS: &str = "192.168.0.16";
 
+#[derive(Debug)]
+enum BrightnessArg {
+    Increase(i8),
+    Decrease(String),
+}
+
+impl FromStr for BrightnessArg {
+    type Err = std::num::ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.starts_with('-') {
+            Ok(BrightnessArg::Decrease(s.to_string()))
+        } else {
+            s.parse::<i8>().map(BrightnessArg::Increase)
+        }
+    }
+}
+
 #[derive(StructOpt, Debug)]
 #[structopt(name = "keylight")]
 enum KeyLightCli {
@@ -27,8 +45,8 @@ enum KeyLightCli {
     },
     #[structopt(about = "Changes the brightness of the keylight by percentage (-100 to 100)")]
     Brightness {
-        #[structopt(short = "b", long = "brightness")]
-        brightness: i8,
+        #[structopt()]
+        brightness: BrightnessArg,
 
         #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS)]
         ip_address: String,
@@ -75,10 +93,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
             keylight.set_power(false).await?;
         }
         KeyLightCli::Brightness { brightness, .. } => {
-            let relative_brightness = brightness as f64 / 100.0;
-            keylight
-                .set_relative_brightness(relative_brightness)
-                .await?;
+            let status = keylight.get().await?;
+            let current_brightness = status.lights[0].brightness;
+            match brightness {
+                BrightnessArg::Increase(brightness) => {
+                    let new_brightness =
+                        ((current_brightness as i8) + brightness).clamp(0, 100) as u8;
+                    println!("Increasing brightness to {}", new_brightness);
+                    keylight.set_brightness(new_brightness).await?;
+                }
+                BrightnessArg::Decrease(brightness) => {
+                    if let Ok(brightness) = brightness.parse::<i8>() {
+                        let new_brightness =
+                            ((current_brightness as i8) + brightness).clamp(0, 100) as u8;
+                        keylight.set_brightness(new_brightness).await?;
+                    } else {
+                        println!("Invalid brightness value");
+                    }
+                }
+            }
         }
         KeyLightCli::Temperature { temperature, .. } => {
             keylight.set_temperature(temperature).await?;

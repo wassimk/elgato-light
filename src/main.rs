@@ -53,11 +53,11 @@ enum KeyLightCli {
 impl KeyLightCli {
     fn ip_address(&self) -> Result<Ipv4Addr, Box<dyn Error>> {
         let ip_str = match self {
-            KeyLightCli::On { ip_address, .. } => ip_address,
-            KeyLightCli::Off { ip_address } => ip_address,
-            KeyLightCli::Brightness { ip_address, .. } => ip_address,
-            KeyLightCli::Temperature { ip_address, .. } => ip_address,
-            KeyLightCli::Status { ip_address } => ip_address,
+            KeyLightCli::On { ip_address, .. }
+            | KeyLightCli::Off { ip_address }
+            | KeyLightCli::Brightness { ip_address, .. }
+            | KeyLightCli::Temperature { ip_address, .. }
+            | KeyLightCli::Status { ip_address } => ip_address,
         };
 
         Ipv4Addr::from_str(ip_str).map_err(|_| "Invalid IP address format".into())

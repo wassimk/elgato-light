@@ -4,48 +4,65 @@ use std::net::Ipv4Addr;
 use std::str::FromStr;
 use structopt::StructOpt;
 
-const DEFAULT_IP_ADDRESS: &str = "192.168.0.16";
+const DEFAULT_IP_ADDRESS: &str = "192.168.0.25";
 
 #[derive(StructOpt, Debug)]
-#[structopt(name = "keylight")]
+#[structopt(
+    name = "keylight",
+    about = "A command line interface for controlling Elgato Key Lights."
+)]
 enum KeyLightCli {
     #[structopt(about = "Turns the keylight on with specified brightness and temperature")]
     On {
-        #[structopt(short = "b", long = "brightness", default_value = "10")]
+        #[structopt(
+            short = "b",
+            long = "brightness",
+            default_value = "10",
+            help = "Set the brightness level (0-100)"
+        )]
         brightness: u8,
 
-        #[structopt(short = "t", long = "temperature", default_value = "3000")]
+        #[structopt(
+            short = "t",
+            long = "temperature",
+            default_value = "3000",
+            help = "Set the color temperature (2900-7000)"
+        )]
         temperature: u32,
 
-        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS)]
+        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS, help = "Specify the IP address of the Key Light")]
         ip_address: String,
     },
     #[structopt(about = "Turns the keylight off")]
     Off {
-        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS)]
+        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS, help = "Specify the IP address of the Key Light")]
         ip_address: String,
     },
     #[structopt(
         about = "Changes the brightness of the keylight. Use -100 to 100. Use -- to pass negative arguments."
     )]
     Brightness {
-        #[structopt()]
+        #[structopt(help = "Change the brightness level (-100 to 100)")]
         brightness: i8,
 
-        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS)]
+        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS, help = "Specify the IP address of the Key Light")]
         ip_address: String,
     },
     #[structopt(about = "Sets the temperature of the keylight")]
     Temperature {
-        #[structopt(short = "t", long = "temperature")]
+        #[structopt(
+            short = "t",
+            long = "temperature",
+            help = "Set the color temperature (2900-7000)"
+        )]
         temperature: u32,
 
-        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS)]
+        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS, help = "Specify the IP address of the Key Light")]
         ip_address: String,
     },
     #[structopt(about = "Gets the status of the keylight")]
     Status {
-        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS)]
+        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS, help = "Specify the IP address of the Key Light")]
         ip_address: String,
     },
 }

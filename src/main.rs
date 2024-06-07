@@ -6,24 +6,6 @@ use structopt::StructOpt;
 
 const DEFAULT_IP_ADDRESS: &str = "192.168.0.16";
 
-#[derive(Debug)]
-enum BrightnessArg {
-    Increase(i8),
-    Decrease(String),
-}
-
-impl FromStr for BrightnessArg {
-    type Err = std::num::ParseIntError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.starts_with('-') {
-            Ok(BrightnessArg::Decrease(s.to_string()))
-        } else {
-            s.parse::<i8>().map(BrightnessArg::Increase)
-        }
-    }
-}
-
 #[derive(StructOpt, Debug)]
 #[structopt(name = "keylight")]
 enum KeyLightCli {
@@ -48,7 +30,7 @@ enum KeyLightCli {
     )]
     Brightness {
         #[structopt()]
-        brightness: BrightnessArg,
+        brightness: i8,
 
         #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS)]
         ip_address: String,
@@ -107,18 +89,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         KeyLightCli::Brightness { brightness, .. } => {
             let status = keylight.get().await?;
             let current_brightness = status.lights[0].brightness;
-            let new_brightness = match brightness {
-                BrightnessArg::Increase(value) => {
-                    ((current_brightness as i8) + value).clamp(0, 100) as u8
-                }
-                BrightnessArg::Decrease(value) => {
-                    let decrease_value = value.parse::<i8>().map_err(|_| {
-                        "Failed to parse decrease value. Please provide a valid negative number between 0 and 100."
-                    })?;
-
-                    ((current_brightness as i8) + decrease_value).clamp(0, 100) as u8
-                }
-            };
+            let new_brightness = ((current_brightness as i8) + brightness).clamp(0, 100) as u8;
             keylight.set_brightness(new_brightness).await?;
         }
         KeyLightCli::Temperature { temperature, .. } => {

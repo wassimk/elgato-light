@@ -72,18 +72,22 @@ async fn get_keylight(ip_address: String) -> Result<KeyLight, Box<dyn Error>> {
     Ok(keylight)
 }
 
+fn get_ip_address(args: &KeyLightCli) -> String {
+    match args {
+        KeyLightCli::On { ip_address, .. } => ip_address.clone(),
+        KeyLightCli::Off { ip_address } => ip_address.clone(),
+        KeyLightCli::Brightness { ip_address, .. } => ip_address.clone(),
+        KeyLightCli::Temperature { ip_address, .. } => ip_address.clone(),
+        KeyLightCli::Status { ip_address } => ip_address.clone(),
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let args = KeyLightCli::from_args();
-    let ip_address = match &args {
-        KeyLightCli::On { ip_address, .. } => ip_address,
-        KeyLightCli::Off { ip_address } => ip_address,
-        KeyLightCli::Brightness { ip_address, .. } => ip_address,
-        KeyLightCli::Temperature { ip_address, .. } => ip_address,
-        KeyLightCli::Status { ip_address } => ip_address,
-    };
+    let ip_address = get_ip_address(&args);
 
-    let mut keylight = get_keylight(ip_address.clone()).await?;
+    let mut keylight = get_keylight(ip_address).await?;
 
     match args {
         KeyLightCli::On {

@@ -88,11 +88,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
         KeyLightCli::Brightness { brightness, .. } => {
             let status = keylight.get().await?;
+            if status.lights[0].on == 0 {
+                keylight.set_power(true).await?;
+            }
+
             let current_brightness = status.lights[0].brightness;
             let new_brightness = ((current_brightness as i8) + brightness).clamp(0, 100) as u8;
             keylight.set_brightness(new_brightness).await?;
         }
         KeyLightCli::Temperature { temperature, .. } => {
+            let status = keylight.get().await?;
+            if status.lights[0].on == 0 {
+                keylight.set_power(true).await?;
+            }
+
             keylight.set_temperature(temperature).await?;
         }
         KeyLightCli::Status { .. } => {

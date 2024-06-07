@@ -8,7 +8,7 @@ const DEFAULT_IP_ADDRESS: &str = "192.168.0.25";
 
 #[derive(StructOpt, Debug)]
 #[structopt(
-    name = "elgago light",
+    name = "elgago light cli",
     about = "A command line interface for controlling an Elgato light by its IP address"
 )]
 enum KeyLightCli {

@@ -26,7 +26,7 @@ enum KeyLightCli {
         ip_address: String,
     },
     #[structopt(
-        about = "Changes the brightness of the keylight. Values are -100 to 100. Use -- to pass negative arguments."
+        about = "Changes the brightness of the keylight. Use -100 to 100. Use -- to pass negative arguments."
     )]
     Brightness {
         #[structopt()]
@@ -62,56 +62,61 @@ impl KeyLightCli {
 
         Ipv4Addr::from_str(ip_str).map_err(|_| "Invalid IP address format".into())
     }
-}
 
-async fn get_keylight(ip_address: Ipv4Addr) -> Result<KeyLight, Box<dyn Error>> {
-    let keylight = KeyLight::new_from_ip("Elgato Light", ip_address, None).await?;
-    Ok(keylight)
-}
-
-async fn ensure_light_on(keylight: &mut KeyLight) -> Result<(), Box<dyn Error>> {
-    let status = keylight.get().await?;
-    if status.lights[0].on == 0 {
-        keylight.set_power(true).await?;
+    async fn get_keylight(ip_address: Ipv4Addr) -> Result<KeyLight, Box<dyn Error>> {
+        let keylight = KeyLight::new_from_ip("Elgato Light", ip_address, None).await?;
+        Ok(keylight)
     }
-    Ok(())
+
+    async fn ensure_light_on(keylight: &mut KeyLight) -> Result<(), Box<dyn Error>> {
+        let status = keylight.get().await?;
+        if status.lights[0].on == 0 {
+            keylight.set_power(true).await?;
+        }
+        Ok(())
+    }
+
+    async fn run(&self, mut keylight: KeyLight) -> Result<(), Box<dyn Error>> {
+        match self {
+            KeyLightCli::On {
+                brightness,
+                temperature,
+                ..
+            } => {
+                keylight.set_power(true).await?;
+                keylight.set_brightness(*brightness).await?;
+                keylight.set_temperature(*temperature).await?;
+            }
+            KeyLightCli::Off { .. } => {
+                keylight.set_power(false).await?;
+            }
+            KeyLightCli::Brightness { brightness, .. } => {
+                KeyLightCli::ensure_light_on(&mut keylight).await?;
+                let status = keylight.get().await?;
+                let current_brightness = status.lights[0].brightness;
+                let new_brightness = ((current_brightness as i8) + *brightness).clamp(0, 100) as u8;
+                keylight.set_brightness(new_brightness).await?;
+            }
+            KeyLightCli::Temperature { temperature, .. } => {
+                KeyLightCli::ensure_light_on(&mut keylight).await?;
+                keylight.set_temperature(*temperature).await?;
+            }
+            KeyLightCli::Status { .. } => {
+                let status = keylight.get().await?;
+                println!("{:?}", status);
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let args = KeyLightCli::from_args();
     let ip_address = args.ip_address()?;
-    let mut keylight = get_keylight(ip_address).await?;
-
-    match args {
-        KeyLightCli::On {
-            brightness,
-            temperature,
-            ..
-        } => {
-            keylight.set_power(true).await?;
-            keylight.set_brightness(brightness).await?;
-            keylight.set_temperature(temperature).await?;
-        }
-        KeyLightCli::Off { .. } => {
-            keylight.set_power(false).await?;
-        }
-        KeyLightCli::Brightness { brightness, .. } => {
-            ensure_light_on(&mut keylight).await?;
-            let status = keylight.get().await?;
-            let current_brightness = status.lights[0].brightness;
-            let new_brightness = ((current_brightness as i8) + brightness).clamp(0, 100) as u8;
-            keylight.set_brightness(new_brightness).await?;
-        }
-        KeyLightCli::Temperature { temperature, .. } => {
-            ensure_light_on(&mut keylight).await?;
-            keylight.set_temperature(temperature).await?;
-        }
-        KeyLightCli::Status { .. } => {
-            let status = keylight.get().await?;
-            println!("{:?}", status);
-        }
-    }
+    let keylight = KeyLightCli::get_keylight(ip_address).await?;
+    args.run(keylight).await?;
 
     Ok(())
 }

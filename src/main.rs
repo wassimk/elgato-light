@@ -43,7 +43,9 @@ enum KeyLightCli {
         #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS)]
         ip_address: String,
     },
-    #[structopt(about = "Changes the brightness of the keylight by percentage (-100 to 100)")]
+    #[structopt(
+        about = "Changes the brightness of the keylight. Values are -100 to 100. Use -- to pass negative arguments."
+    )]
     Brightness {
         #[structopt()]
         brightness: BrightnessArg,
@@ -110,7 +112,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     ((current_brightness as i8) + value).clamp(0, 100) as u8
                 }
                 BrightnessArg::Decrease(value) => {
-                    let decrease_value = value.parse::<i8>().unwrap_or(0);
+                    let decrease_value = value.parse::<i8>().map_err(|_| {
+                        "Failed to parse decrease value. Please provide a valid negative number between 0 and 100."
+                    })?;
+
                     ((current_brightness as i8) + decrease_value).clamp(0, 100) as u8
                 }
             };

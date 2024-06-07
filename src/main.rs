@@ -8,11 +8,11 @@ const DEFAULT_IP_ADDRESS: &str = "192.168.0.25";
 
 #[derive(StructOpt, Debug)]
 #[structopt(
-    name = "keylight",
-    about = "A command line interface for controlling Elgato Key Lights."
+    name = "elgago light",
+    about = "A command line interface for controlling an Elgato light by its IP address"
 )]
 enum KeyLightCli {
-    #[structopt(about = "Turns the keylight on with specified brightness and temperature")]
+    #[structopt(about = "Turns the light on with specified brightness and temperature")]
     On {
         #[structopt(
             short = "b",
@@ -30,25 +30,25 @@ enum KeyLightCli {
         )]
         temperature: u32,
 
-        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS, help = "Specify the IP address of the Key Light")]
+        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS, help = "Specify the IP address of the Elgato Light")]
         ip_address: String,
     },
-    #[structopt(about = "Turns the keylight off")]
+    #[structopt(about = "Turns the light off")]
     Off {
-        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS, help = "Specify the IP address of the Key Light")]
+        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS, help = "Specify the IP address of the Elgato Light")]
         ip_address: String,
     },
     #[structopt(
-        about = "Changes the brightness of the keylight. Use -100 to 100. Use -- to pass negative arguments."
+        about = "Changes the brightness of the light. Use -100 to 100. Use -- to pass negative arguments."
     )]
     Brightness {
         #[structopt(help = "Change the brightness level (-100 to 100)")]
         brightness: i8,
 
-        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS, help = "Specify the IP address of the Key Light")]
+        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS, help = "Specify the IP address of the Elgato Light")]
         ip_address: String,
     },
-    #[structopt(about = "Sets the temperature of the keylight")]
+    #[structopt(about = "Sets the temperature of the light")]
     Temperature {
         #[structopt(
             short = "t",
@@ -57,12 +57,12 @@ enum KeyLightCli {
         )]
         temperature: u32,
 
-        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS, help = "Specify the IP address of the Key Light")]
+        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS, help = "Specify the IP address of the Elgato Light")]
         ip_address: String,
     },
-    #[structopt(about = "Gets the status of the keylight")]
+    #[structopt(about = "Gets the status of the light")]
     Status {
-        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS, help = "Specify the IP address of the Key Light")]
+        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS, help = "Specify the IP address of the Elgato Light")]
         ip_address: String,
     },
 }

@@ -50,11 +50,7 @@ enum KeyLightCli {
     },
     #[structopt(about = "Sets the temperature of the light")]
     Temperature {
-        #[structopt(
-            short = "t",
-            long = "temperature",
-            help = "Set the color temperature (2900-7000)"
-        )]
+        #[structopt(help = "Set the color temperature (2900-7000)")]
         temperature: u32,
 
         #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS, help = "Specify the IP address of the Elgato Light")]

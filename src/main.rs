@@ -65,7 +65,7 @@ impl KeyLightCli {
 }
 
 async fn get_keylight(ip_address: Ipv4Addr) -> Result<KeyLight, Box<dyn Error>> {
-    let keylight = KeyLight::new_from_ip("Ring Light", ip_address, None).await?;
+    let keylight = KeyLight::new_from_ip("Elgato Light", ip_address, None).await?;
     Ok(keylight)
 }
 

@@ -51,8 +51,16 @@ keyligth on --help
 keylight brightness --help
 ```
 
-Get the status for troubleshooting.
+### Troubleshooting
+
+Get the light status.
 
 ```shell
 keylight status
+```
+
+The Apple binaries are not signed with an Apple Developer account, so you must authorize them manually.
+
+```shell
+xattr -dr com.apple.quarantine ./elgato-light-cli
 ```

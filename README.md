@@ -1,14 +1,16 @@
 # elgato-light
 
-This is a CLI tool to control an Elgato light. It also works for any of their key lights.
+This is a CLI tool designed to control an Elgato light.
 
-The Elgato Control Central software rarely detects my Elgato Ring Light, and I'm at my wits' end trying to find out why. I've tried everything, including a separate 2.4 GHz wireless network.
+As someone who uses an Elgato Ring Light, I struggled with the Elgato Control Central software, which often fails to detect my light. After countless attempts to fix the issue, including setting up a 2.4 GHz network specifically for the light, I finally found a solution.
 
-During troubleshooting, I learned it always has an IP address and never loses a network connection. That's what led me to find its interface. So, here we are. I will control it with this CLI tool via Raycast on macOS.
+During my troubleshooting, I discovered that the light consistently holds an IP address, ensuring its continuous connection to the network. This revelation led me to delve deeper into the light's interface, ultimately resulting in the development of this CLI tool.
+
+This tool can be used stand-alone, but I designed it primarily for use within an extension with [Raycast](https://www.raycast.com) on macOS. That extension is available in the [raycast-elgato-light](https://github.com/wassimk/raycast-elgato-light) repository.
 
 ### Usage
 
-It's a CLI tool with my Elgato light IP address of *192.168.0.25*, brightness, and temperature hard-coded as the defaults.
+The CLI tool has my Elgato light IP address of *192.168.0.25*, preferred brightness, and temperature hard-coded as the defaults.
 
 ```shell
 elgato-light on
@@ -36,7 +38,7 @@ Set the temperature between 2900 and 7000.
 elgato-light temperature 5000
 ```
 
-Use a non-default IP address for the light on all commands.
+Use a non-default IP address for the light on any command.
 
 ```shell
 elgato-light on --ip-address 192.168.0.10

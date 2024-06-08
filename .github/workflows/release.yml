@@ -31,12 +31,11 @@ jobs:
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v0
         with:
-          command: ${{ matrix.platform.command }}
           target: ${{ matrix.platform.target }}
           args: "--locked --release"
           strip: true
 
-      - name: Package as archive
+      - name: Archive binary
         shell: bash
         run: |
           cd target/${{ matrix.platform.target }}/release
@@ -47,17 +46,16 @@ jobs:
           fi
           cd -
 
+      - name: Generate SHA-256
+        run: shasum -a 256 ${{ matrix.platform.name }} > ${{ matrix.platform.name }}-sha.txt
+
       - name: Publish release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: elgato-light-${{ matrix.platform.os_name }}
+          name: elgato-light-${{ matrix.platform.target }}
           path: "elgato-light-*"
-
-      - name: Generate SHA-256
-        run: shasum -a 256 ${{ matrix.platform.name }}
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          draft: true
           files: "elgato-light*"

@@ -8,10 +8,10 @@ const DEFAULT_IP_ADDRESS: &str = "192.168.0.25";
 
 #[derive(StructOpt, Debug)]
 #[structopt(
-    name = "elgago light cli",
+    name = "elgato light",
     about = "A command line interface for controlling an Elgato light by its IP address"
 )]
-enum KeyLightCli {
+enum ElgatoLight {
     #[structopt(about = "Turns the light on with specified brightness and temperature")]
     On {
         #[structopt(
@@ -63,14 +63,14 @@ enum KeyLightCli {
     },
 }
 
-impl KeyLightCli {
+impl ElgatoLight {
     fn ip_address(&self) -> Result<Ipv4Addr, Box<dyn Error>> {
         let ip_str = match self {
-            KeyLightCli::On { ip_address, .. }
-            | KeyLightCli::Off { ip_address }
-            | KeyLightCli::Brightness { ip_address, .. }
-            | KeyLightCli::Temperature { ip_address, .. }
-            | KeyLightCli::Status { ip_address } => ip_address,
+            ElgatoLight::On { ip_address, .. }
+            | ElgatoLight::Off { ip_address }
+            | ElgatoLight::Brightness { ip_address, .. }
+            | ElgatoLight::Temperature { ip_address, .. }
+            | ElgatoLight::Status { ip_address } => ip_address,
         };
 
         Ipv4Addr::from_str(ip_str).map_err(|_| "Invalid IP address format".into())
@@ -91,7 +91,7 @@ impl KeyLightCli {
 
     async fn run(&self, mut keylight: KeyLight) -> Result<(), Box<dyn Error>> {
         match self {
-            KeyLightCli::On {
+            ElgatoLight::On {
                 brightness,
                 temperature,
                 ..
@@ -100,21 +100,21 @@ impl KeyLightCli {
                 keylight.set_brightness(*brightness).await?;
                 keylight.set_temperature(*temperature).await?;
             }
-            KeyLightCli::Off { .. } => {
+            ElgatoLight::Off { .. } => {
                 keylight.set_power(false).await?;
             }
-            KeyLightCli::Brightness { brightness, .. } => {
-                KeyLightCli::ensure_light_on(&mut keylight).await?;
+            ElgatoLight::Brightness { brightness, .. } => {
+                ElgatoLight::ensure_light_on(&mut keylight).await?;
                 let status = keylight.get().await?;
                 let current_brightness = status.lights[0].brightness;
                 let new_brightness = ((current_brightness as i8) + *brightness).clamp(0, 100) as u8;
                 keylight.set_brightness(new_brightness).await?;
             }
-            KeyLightCli::Temperature { temperature, .. } => {
-                KeyLightCli::ensure_light_on(&mut keylight).await?;
+            ElgatoLight::Temperature { temperature, .. } => {
+                ElgatoLight::ensure_light_on(&mut keylight).await?;
                 keylight.set_temperature(*temperature).await?;
             }
-            KeyLightCli::Status { .. } => {
+            ElgatoLight::Status { .. } => {
                 let status = keylight.get().await?;
                 println!("{:?}", status);
             }
@@ -126,9 +126,9 @@ impl KeyLightCli {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let args = KeyLightCli::from_args();
+    let args = ElgatoLight::from_args();
     let ip_address = args.ip_address()?;
-    let keylight = KeyLightCli::get_keylight(ip_address).await?;
+    let keylight = ElgatoLight::get_keylight(ip_address).await?;
     args.run(keylight).await?;
 
     Ok(())

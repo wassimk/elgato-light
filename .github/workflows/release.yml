@@ -13,14 +13,14 @@ jobs:
           - release_for: macOS-x86_64
             os: macOS-latest
             target: x86_64-apple-darwin
-            bin: elgato-light-cli
-            name: elgato-light-cli-Darwin-x86_64.tar.gz
+            bin: elgato-light
+            name: elgato-light-Darwin-x86_64.tar.gz
 
           - release_for: macOS-aarch64
             os: macOS-latest
             target: aarch64-apple-darwin
-            bin: elgato-light-cli
-            name: elgato-light-cli-Darwin-aarch64.tar.gz
+            bin: elgato-light
+            name: elgato-light-Darwin-aarch64.tar.gz
 
     runs-on: ${{ matrix.platform.os }}
 
@@ -50,8 +50,8 @@ jobs:
       - name: Publish release artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: elgato-light-cli-${{ matrix.platform.os_name }}
-          path: "elgato-light-cli-*"
+          name: elgato-light-${{ matrix.platform.os_name }}
+          path: "elgato-light-*"
 
       - name: Generate SHA-256
         run: shasum -a 256 ${{ matrix.platform.name }}
@@ -60,4 +60,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           draft: true
-          files: "elgato-light-cli*"
+          files: "elgato-light*"

@@ -1,4 +1,4 @@
-# elgato-light-cli
+# elgato-light
 
 This is a CLI tool to control an Elgato light. It also works for any of their key lights.
 
@@ -11,44 +11,44 @@ During troubleshooting, I learned it always has an IP address and never loses a 
 It's a CLI tool with my Elgato light IP address of *192.168.0.25*, brightness, and temperature hard-coded as the defaults.
 
 ```shell
-keylight on
-keylight off
+elgato-light on
+elgato-light off
 ```
 
 Brightness and/or temperature can be set when turning on.
 
 ```shell
-keylight on --brightness 20
-keylight on --temperature 5000
-keylight on --brightness 20 --temperature 5000
+elgato-light on --brightness 20
+elgato-light on --temperature 5000
+elgato-light on --brightness 20 --temperature 5000
 ```
 
 Change the relative brightness between 0 and 100. *Use `--` for negative values.*
 
 ```shell
-keylight brightness -- 10
-keylight brightness -- -10
+elgato-light brightness -- 10
+elgato-light brightness -- -10
 ```
 
 Set the temperature between 2900 and 7000.
 
 ```shell
-keylight temperature 5000
+elgato-light temperature 5000
 ```
 
 Use a non-default IP address for the light on all commands.
 
 ```shell
-keylight on --ip-address 192.168.0.10
-keylight off --ip-address 192.168.0.10
+elgato-light on --ip-address 192.168.0.10
+elgato-light off --ip-address 192.168.0.10
 ```
 
 Help is available for all commands.
 
 ```shell
-keylight --help
-keyligth on --help
-keylight brightness --help
+elgato-light --help
+elgato-light on --help
+elgato-light brightness --help
 ```
 
 ### Troubleshooting
@@ -56,11 +56,11 @@ keylight brightness --help
 Get the light status.
 
 ```shell
-keylight status
+elgato-light status
 ```
 
 The Apple binaries are not signed with an Apple Developer account, so you must authorize them manually.
 
 ```shell
-xattr -dr com.apple.quarantine ./elgato-light-cli
+xattr -dr com.apple.quarantine ./elgato-light
 ```

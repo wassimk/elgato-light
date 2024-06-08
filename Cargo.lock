@@ -360,7 +360,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "elgato-light-cli"
+name = "elgato-light"
 version = "0.1.0"
 dependencies = [
  "clap-v3",

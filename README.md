@@ -8,7 +8,7 @@ During my troubleshooting, I discovered that the light consistently holds an IP 
 
 This tool can be used stand-alone, but I designed it primarily for use within an extension with [Raycast](https://www.raycast.com) on macOS. That extension is available in the [raycast-elgato-light](https://github.com/wassimk/raycast-elgato-light) repository.
 
-### Usage
+### ✨ Usage
 
 The CLI tool has my Elgato light IP address of *192.168.0.25*, preferred brightness, and temperature hard-coded as the defaults.
 
@@ -53,7 +53,7 @@ elgato-light on --help
 elgato-light brightness --help
 ```
 
-### Troubleshooting
+### 🔍 Troubleshooting
 
 Get the light status.
 

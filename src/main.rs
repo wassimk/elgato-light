@@ -1,8 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
-use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::Ipv4Addr;
 
 const DEFAULT_IP_ADDRESS: &str = "192.168.0.25";
 const LIGHT_PORT: u16 = 9123;
@@ -31,37 +30,22 @@ fn mireds_to_kelvin(mireds: u16) -> u32 {
     1_000_000 / mireds as u32
 }
 
-fn build_client() -> Result<Client> {
-    Client::builder()
-        // Force IPv4 — Elgato lights are IPv4-only local network devices.
-        // reqwest 0.12 (hyper 1.0) can attempt IPv6 connections even for
-        // IPv4 addresses, which fails with EHOSTUNREACH on some networks.
-        .local_address(IpAddr::V4(Ipv4Addr::UNSPECIFIED))
-        .http1_only()
-        .build()
-        .context("Failed to create HTTP client")
+fn light_url(ip: Ipv4Addr) -> String {
+    format!("http://{}:{}/elgato/lights", ip, LIGHT_PORT)
 }
 
-async fn get_status(client: &Client, ip: Ipv4Addr) -> Result<LightStatus> {
-    let url = format!("http://{}:{}/elgato/lights", ip, LIGHT_PORT);
-    let status: LightStatus = client
-        .get(&url)
-        .send()
-        .await
+fn get_status(ip: Ipv4Addr) -> Result<LightStatus> {
+    let status: LightStatus = ureq::get(&light_url(ip))
+        .call()
         .context("Failed to connect to light")?
-        .json()
-        .await
+        .into_json()
         .context("Failed to parse light status")?;
     Ok(status)
 }
 
-async fn set_status(client: &Client, ip: Ipv4Addr, status: &LightStatus) -> Result<()> {
-    let url = format!("http://{}:{}/elgato/lights", ip, LIGHT_PORT);
-    client
-        .put(&url)
-        .json(status)
-        .send()
-        .await
+fn set_status(ip: Ipv4Addr, status: &LightStatus) -> Result<()> {
+    ureq::put(&light_url(ip))
+        .send_json(status)
         .context("Failed to send command to light")?;
     Ok(())
 }
@@ -145,11 +129,9 @@ impl Command {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     let cli = Cli::parse();
     let ip = cli.command.ip_address();
-    let client = build_client()?;
 
     match cli.command {
         Command::On {
@@ -165,8 +147,11 @@ async fn main() -> Result<()> {
                     temperature: kelvin_to_mireds(temperature),
                 }],
             };
-            set_status(&client, ip, &status).await?;
-            println!("Light on (brightness: {}%, temperature: {}K)", brightness, temperature);
+            set_status(ip, &status)?;
+            println!(
+                "Light on (brightness: {}%, temperature: {}K)",
+                brightness, temperature
+            );
         }
         Command::Off { .. } => {
             let status = LightStatus {
@@ -177,11 +162,11 @@ async fn main() -> Result<()> {
                     temperature: 0,
                 }],
             };
-            set_status(&client, ip, &status).await?;
+            set_status(ip, &status)?;
             println!("Light off");
         }
         Command::Brightness { brightness, .. } => {
-            let mut status = get_status(&client, ip).await?;
+            let mut status = get_status(ip)?;
             let light = status
                 .lights
                 .first_mut()
@@ -191,11 +176,11 @@ async fn main() -> Result<()> {
             }
             let new_brightness = (light.brightness as i16 + brightness as i16).clamp(0, 100) as u8;
             light.brightness = new_brightness;
-            set_status(&client, ip, &status).await?;
+            set_status(ip, &status)?;
             println!("Brightness: {}%", new_brightness);
         }
         Command::Temperature { temperature, .. } => {
-            let mut status = get_status(&client, ip).await?;
+            let mut status = get_status(ip)?;
             let light = status
                 .lights
                 .first_mut()
@@ -204,11 +189,11 @@ async fn main() -> Result<()> {
                 light.on = 1;
             }
             light.temperature = kelvin_to_mireds(temperature);
-            set_status(&client, ip, &status).await?;
+            set_status(ip, &status)?;
             println!("Temperature: {}K", temperature);
         }
         Command::Status { .. } => {
-            let status = get_status(&client, ip).await?;
+            let status = get_status(ip)?;
             let light = status
                 .lights
                 .first()

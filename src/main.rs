@@ -1,135 +1,204 @@
-use elgato_keylight::KeyLight;
-use std::error::Error;
+use anyhow::{anyhow, Context, Result};
+use clap::{Parser, Subcommand};
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use std::net::Ipv4Addr;
-use std::str::FromStr;
-use structopt::StructOpt;
 
 const DEFAULT_IP_ADDRESS: &str = "192.168.0.25";
+const LIGHT_PORT: u16 = 9123;
 
-#[derive(StructOpt, Debug)]
-#[structopt(
-    name = "elgato light",
-    about = "A command line interface for controlling an Elgato light by its IP address"
+// --- Elgato Light HTTP API ---
+
+#[derive(Debug, Serialize, Deserialize)]
+struct LightStatus {
+    #[serde(rename = "numberOfLights")]
+    number_of_lights: i64,
+    lights: Vec<Light>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Light {
+    on: u8,
+    brightness: u8,
+    temperature: u16,
+}
+
+fn kelvin_to_mireds(kelvin: u32) -> u16 {
+    ((kelvin - 2900) * 201 / 4100 + 143) as u16
+}
+
+fn mireds_to_kelvin(mireds: u16) -> u32 {
+    (mireds as u32 - 143) * 4100 / 201 + 2900
+}
+
+async fn get_status(client: &Client, ip: Ipv4Addr) -> Result<LightStatus> {
+    let url = format!("http://{}:{}/elgato/lights", ip, LIGHT_PORT);
+    let status: LightStatus = client
+        .get(&url)
+        .send()
+        .await
+        .context("Failed to connect to light")?
+        .json()
+        .await
+        .context("Failed to parse light status")?;
+    Ok(status)
+}
+
+async fn set_status(client: &Client, ip: Ipv4Addr, status: &LightStatus) -> Result<()> {
+    let url = format!("http://{}:{}/elgato/lights", ip, LIGHT_PORT);
+    client
+        .put(&url)
+        .json(status)
+        .send()
+        .await
+        .context("Failed to send command to light")?;
+    Ok(())
+}
+
+// --- CLI ---
+
+fn validate_temperature(s: &str) -> Result<u32, String> {
+    let val: u32 = s.parse().map_err(|_| format!("'{s}' is not a valid number"))?;
+    if (2900..=7000).contains(&val) {
+        Ok(val)
+    } else {
+        Err(format!("temperature must be between 2900 and 7000, got {val}"))
+    }
+}
+
+#[derive(Parser, Debug)]
+#[command(
+    name = "elgato-light",
+    about = "A CLI for controlling an Elgato light by IP address"
 )]
-enum ElgatoLight {
-    #[structopt(about = "Turns the light on with specified brightness and temperature")]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand, Debug)]
+enum Command {
+    /// Turn the light on with specified brightness and temperature
     On {
-        #[structopt(
-            short = "b",
-            long = "brightness",
-            default_value = "10",
-            help = "Set the brightness level (0-100)"
-        )]
+        #[arg(short, long, default_value = "10", help = "Brightness level (0-100)")]
         brightness: u8,
 
-        #[structopt(
-            short = "t",
-            long = "temperature",
-            default_value = "3000",
-            help = "Set the color temperature (2900-7000)"
-        )]
+        #[arg(short, long, default_value = "3000", value_parser = validate_temperature, help = "Color temperature (2900-7000)")]
         temperature: u32,
 
-        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS, help = "Specify the IP address of the Elgato Light")]
-        ip_address: String,
+        #[arg(short = 'i', long, env = "ELGATO_LIGHT_IP", default_value = DEFAULT_IP_ADDRESS)]
+        ip_address: Ipv4Addr,
     },
-    #[structopt(about = "Turns the light off")]
+    /// Turn the light off
     Off {
-        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS, help = "Specify the IP address of the Elgato Light")]
-        ip_address: String,
+        #[arg(short = 'i', long, env = "ELGATO_LIGHT_IP", default_value = DEFAULT_IP_ADDRESS)]
+        ip_address: Ipv4Addr,
     },
-    #[structopt(
-        about = "Changes the brightness of the light. Use -100 to 100. Use -- to pass negative arguments."
-    )]
+    /// Change the brightness relatively. Use -- to pass negative values.
     Brightness {
-        #[structopt(help = "Change the brightness level (-100 to 100)")]
+        #[arg(help = "Brightness change (-100 to 100)", allow_hyphen_values = true)]
         brightness: i8,
 
-        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS, help = "Specify the IP address of the Elgato Light")]
-        ip_address: String,
+        #[arg(short = 'i', long, env = "ELGATO_LIGHT_IP", default_value = DEFAULT_IP_ADDRESS)]
+        ip_address: Ipv4Addr,
     },
-    #[structopt(about = "Sets the temperature of the light")]
+    /// Set the color temperature
     Temperature {
-        #[structopt(help = "Set the color temperature (2900-7000)")]
+        #[arg(value_parser = validate_temperature, help = "Color temperature (2900-7000)")]
         temperature: u32,
 
-        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS, help = "Specify the IP address of the Elgato Light")]
-        ip_address: String,
+        #[arg(short = 'i', long, env = "ELGATO_LIGHT_IP", default_value = DEFAULT_IP_ADDRESS)]
+        ip_address: Ipv4Addr,
     },
-    #[structopt(about = "Gets the status of the light")]
+    /// Get the current status of the light
     Status {
-        #[structopt(short = "i", long = "ip-address", default_value = DEFAULT_IP_ADDRESS, help = "Specify the IP address of the Elgato Light")]
-        ip_address: String,
+        #[arg(short = 'i', long, env = "ELGATO_LIGHT_IP", default_value = DEFAULT_IP_ADDRESS)]
+        ip_address: Ipv4Addr,
     },
 }
 
-impl ElgatoLight {
-    fn ip_address(&self) -> Result<Ipv4Addr, Box<dyn Error>> {
-        let ip_str = match self {
-            ElgatoLight::On { ip_address, .. }
-            | ElgatoLight::Off { ip_address }
-            | ElgatoLight::Brightness { ip_address, .. }
-            | ElgatoLight::Temperature { ip_address, .. }
-            | ElgatoLight::Status { ip_address } => ip_address,
-        };
-
-        Ipv4Addr::from_str(ip_str).map_err(|_| "Invalid IP address format".into())
-    }
-
-    async fn get_keylight(ip_address: Ipv4Addr) -> Result<KeyLight, Box<dyn Error>> {
-        let keylight = KeyLight::new_from_ip("Elgato Light", ip_address, None).await?;
-        Ok(keylight)
-    }
-
-    async fn ensure_light_on(keylight: &mut KeyLight) -> Result<(), Box<dyn Error>> {
-        let status = keylight.get().await?;
-        if status.lights[0].on == 0 {
-            keylight.set_power(true).await?;
-        }
-        Ok(())
-    }
-
-    async fn run(&self, mut keylight: KeyLight) -> Result<(), Box<dyn Error>> {
+impl Command {
+    fn ip_address(&self) -> Ipv4Addr {
         match self {
-            ElgatoLight::On {
-                brightness,
-                temperature,
-                ..
-            } => {
-                keylight.set_power(true).await?;
-                keylight.set_brightness(*brightness).await?;
-                keylight.set_temperature(*temperature).await?;
-            }
-            ElgatoLight::Off { .. } => {
-                keylight.set_power(false).await?;
-            }
-            ElgatoLight::Brightness { brightness, .. } => {
-                ElgatoLight::ensure_light_on(&mut keylight).await?;
-                let status = keylight.get().await?;
-                let current_brightness = status.lights[0].brightness;
-                let new_brightness = ((current_brightness as i8) + *brightness).clamp(0, 100) as u8;
-                keylight.set_brightness(new_brightness).await?;
-            }
-            ElgatoLight::Temperature { temperature, .. } => {
-                ElgatoLight::ensure_light_on(&mut keylight).await?;
-                keylight.set_temperature(*temperature).await?;
-            }
-            ElgatoLight::Status { .. } => {
-                let status = keylight.get().await?;
-                println!("{:?}", status);
-            }
+            Command::On { ip_address, .. }
+            | Command::Off { ip_address }
+            | Command::Brightness { ip_address, .. }
+            | Command::Temperature { ip_address, .. }
+            | Command::Status { ip_address } => *ip_address,
         }
-
-        Ok(())
     }
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    let args = ElgatoLight::from_args();
-    let ip_address = args.ip_address()?;
-    let keylight = ElgatoLight::get_keylight(ip_address).await?;
-    args.run(keylight).await?;
+async fn main() -> Result<()> {
+    let cli = Cli::parse();
+    let ip = cli.command.ip_address();
+    let client = Client::new();
+
+    match cli.command {
+        Command::On {
+            brightness,
+            temperature,
+            ..
+        } => {
+            let status = LightStatus {
+                number_of_lights: 1,
+                lights: vec![Light {
+                    on: 1,
+                    brightness,
+                    temperature: kelvin_to_mireds(temperature),
+                }],
+            };
+            set_status(&client, ip, &status).await?;
+        }
+        Command::Off { .. } => {
+            let mut status = get_status(&client, ip).await?;
+            let light = status
+                .lights
+                .first_mut()
+                .ok_or_else(|| anyhow!("No lights found in response"))?;
+            light.on = 0;
+            set_status(&client, ip, &status).await?;
+        }
+        Command::Brightness { brightness, .. } => {
+            let mut status = get_status(&client, ip).await?;
+            let light = status
+                .lights
+                .first_mut()
+                .ok_or_else(|| anyhow!("No lights found in response"))?;
+            if light.on == 0 {
+                light.on = 1;
+            }
+            let new_brightness = (light.brightness as i16 + brightness as i16).clamp(0, 100) as u8;
+            light.brightness = new_brightness;
+            set_status(&client, ip, &status).await?;
+        }
+        Command::Temperature { temperature, .. } => {
+            let mut status = get_status(&client, ip).await?;
+            let light = status
+                .lights
+                .first_mut()
+                .ok_or_else(|| anyhow!("No lights found in response"))?;
+            if light.on == 0 {
+                light.on = 1;
+            }
+            light.temperature = kelvin_to_mireds(temperature);
+            set_status(&client, ip, &status).await?;
+        }
+        Command::Status { .. } => {
+            let status = get_status(&client, ip).await?;
+            let light = status
+                .lights
+                .first()
+                .ok_or_else(|| anyhow!("No lights found in response"))?;
+            println!(
+                "Power:       {}",
+                if light.on == 1 { "On" } else { "Off" }
+            );
+            println!("Brightness:  {}%", light.brightness);
+            println!("Temperature: {}K", mireds_to_kelvin(light.temperature));
+        }
+    }
 
     Ok(())
 }

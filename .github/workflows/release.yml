@@ -22,6 +22,18 @@ jobs:
             bin: elgato-light
             name: elgato-light-Darwin-aarch64.tar.gz
 
+          - release_for: Linux-x86_64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bin: elgato-light
+            name: elgato-light-Linux-x86_64.tar.gz
+
+          - release_for: Linux-aarch64
+            os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            bin: elgato-light
+            name: elgato-light-Linux-aarch64.tar.gz
+
     runs-on: ${{ matrix.platform.os }}
 
     steps:
@@ -85,7 +97,13 @@ jobs:
           cd -
 
       - name: Generate SHA-256
-        run: shasum -a 256 ${{ matrix.platform.name }} > ${{ matrix.platform.name }}-sha.txt
+        shell: bash
+        run: |
+          if command -v shasum &> /dev/null; then
+            shasum -a 256 ${{ matrix.platform.name }} > ${{ matrix.platform.name }}-sha.txt
+          else
+            sha256sum ${{ matrix.platform.name }} > ${{ matrix.platform.name }}-sha.txt
+          fi
 
       - name: Publish release artifacts
         uses: actions/upload-artifact@v4

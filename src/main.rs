@@ -154,14 +154,12 @@ fn main() -> Result<()> {
             );
         }
         Command::Off { .. } => {
-            let status = LightStatus {
-                number_of_lights: 1,
-                lights: vec![Light {
-                    on: 0,
-                    brightness: 0,
-                    temperature: 0,
-                }],
-            };
+            let mut status = get_status(ip)?;
+            let light = status
+                .lights
+                .first_mut()
+                .ok_or_else(|| anyhow!("No lights found in response"))?;
+            light.on = 0;
             set_status(ip, &status)?;
             println!("Light off");
         }

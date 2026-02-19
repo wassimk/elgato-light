@@ -56,7 +56,7 @@ jobs:
       - name: Sign binary
         run: |
           codesign --force --options runtime \
-            --sign "Developer ID Application: Wassim Metallaoui (R96B7W6Y9R)" \
+            --sign "Developer ID Application: Wassim Metallaoui (${{ secrets.APPLE_TEAM_ID }})" \
             target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}
 
       - name: Notarize binary

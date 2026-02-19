@@ -48,6 +48,7 @@ jobs:
           strip: true
 
       - name: Import code signing certificate
+        if: runner.os == 'macOS'
         env:
           APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -66,12 +67,14 @@ jobs:
           security list-keychain -d user -s $KEYCHAIN_PATH
 
       - name: Sign binary
+        if: runner.os == 'macOS'
         run: |
           codesign --force --options runtime \
             --sign "Developer ID Application: Wassim Metallaoui (${{ secrets.APPLE_TEAM_ID }})" \
             target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}
 
       - name: Notarize binary
+        if: runner.os == 'macOS'
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
@@ -117,5 +120,5 @@ jobs:
           files: "elgato-light*"
 
       - name: Clean up keychain
-        if: always()
+        if: always() && runner.os == 'macOS'
         run: security delete-keychain $RUNNER_TEMP/signing.keychain-db

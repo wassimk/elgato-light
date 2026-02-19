@@ -61,8 +61,4 @@ Get the light status.
 elgato-light status
 ```
 
-The Apple binaries are not signed with an Apple Developer account, so you must authorize them manually.
-
-```shell
-xattr -dr com.apple.quarantine ./elgato-light
-```
+The Apple binaries are signed and notarized with an Apple Developer account, so they should work without any Gatekeeper warnings.

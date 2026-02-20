@@ -1,23 +1,49 @@
 # elgato-light
 
-This is a CLI tool designed to control an Elgato light.
+A CLI tool for controlling Elgato lights.
 
-As someone who uses an Elgato Ring Light, I struggled with the Elgato Control Central software, which often fails to detect my light. After countless attempts to fix the issue, including setting up a 2.4 GHz network specifically for the light, I finally found a solution.
+On macOS, lights are automatically discovered via Bonjour. On Linux, an IP address must be provided. This tool can be used stand-alone, but it was designed primarily for use within an extension with [Raycast](https://www.raycast.com) on macOS. That extension is available in the [raycast-elgato-light](https://github.com/wassimk/raycast-elgato-light) repository.
 
-During my troubleshooting, I discovered that the light consistently holds an IP address, ensuring its continuous connection to the network. This revelation led me to delve deeper into the light's interface, ultimately resulting in the development of this CLI tool.
+### 💡 Features
 
-This tool can be used stand-alone, but I designed it primarily for use within an extension with [Raycast](https://www.raycast.com) on macOS. That extension is available in the [raycast-elgato-light](https://github.com/wassimk/raycast-elgato-light) repository.
+- **Auto-discovery** on macOS via Bonjour/mDNS, no configuration needed
+- **Discovery caching** for instant subsequent runs, automatically cleared when the light becomes unreachable
+- **Manual IP** support via `--ip-address` flag or `ELGATO_LIGHT_IP` environment variable
+- **Power control** with `on` and `off` commands
+- **Brightness** control, absolute on turn-on or relative adjustments
+- **Color temperature** control in Kelvin (2900K to 7000K)
+- **Status** reporting of current light state
 
 ### 💻 Usage
 
-The CLI tool has my Elgato light IP address of *192.168.0.25*, preferred brightness, and temperature hard-coded as the defaults.
+```
+$ elgato-light --help
+
+A CLI for controlling an Elgato light (auto-discovers via Bonjour on macOS)
+
+Usage: elgato-light [OPTIONS] <COMMAND>
+
+Commands:
+  on           Turn the light on (use -b and -t to set brightness and temperature)
+  off          Turn the light off
+  brightness   Adjust brightness by a relative amount, e.g. 10 or -10
+  temperature  Set the color temperature in Kelvin (2900-7000)
+  status       Get the current status of the light
+
+Options:
+  -i, --ip-address <IP_ADDRESS>  IP address of the light (auto-discovered on macOS if omitted)
+  -h, --help                     Print help
+  -V, --version                  Print version
+```
+
+On macOS, no configuration is needed. The CLI discovers your Elgato light automatically and caches the result for instant subsequent runs.
 
 ```shell
 elgato-light on
 elgato-light off
 ```
 
-Brightness and/or temperature can be set when turning on.
+Brightness and/or temperature can be set when turning on. Brightness defaults to 10% and temperature to 5000K.
 
 ```shell
 elgato-light on --brightness 20
@@ -25,40 +51,53 @@ elgato-light on --temperature 5000
 elgato-light on --brightness 20 --temperature 5000
 ```
 
-Change the relative brightness between 0 and 100. *Use `--` for negative values.*
+Adjust relative brightness between 0 and 100. *Use `--` before negative values.*
 
 ```shell
 elgato-light brightness -- 10
 elgato-light brightness -- -10
 ```
 
-Set the temperature between 2900 and 7000.
+Set the color temperature in Kelvin (2900 to 7000).
 
 ```shell
 elgato-light temperature 5000
 ```
 
-Use a non-default IP address for the light on any command.
+Get the current light status.
 
 ```shell
-elgato-light on --ip-address 192.168.0.10
-elgato-light off --ip-address 192.168.0.10
+elgato-light status
 ```
 
-Help is available for all commands.
+### 🌐 Specifying an IP Address
+
+On Linux, or to skip auto-discovery on macOS, provide the light's IP address directly.
 
 ```shell
-elgato-light --help
-elgato-light on --help
-elgato-light brightness --help
+elgato-light --ip-address 192.168.0.10 on
+elgato-light --ip-address 192.168.0.10 status
+```
+
+The `ELGATO_LIGHT_IP` environment variable can be set as an alternative to passing `--ip-address` on every command.
+
+```shell
+export ELGATO_LIGHT_IP=192.168.0.10
+elgato-light on
 ```
 
 ### 🔍 Troubleshooting
 
-Get the light status.
+If auto-discovery is not finding your light, verify Bonjour can see it with the macOS built-in tool.
 
 ```shell
-elgato-light status
+dns-sd -B _elg._tcp
+```
+
+The discovery cache is stored at `~/Library/Caches/elgato-light/target` and is automatically cleared when the cached light becomes unreachable. To manually clear it:
+
+```shell
+rm ~/Library/Caches/elgato-light/target
 ```
 
 The Apple binaries are signed and notarized with an Apple Developer account, so they should work without any Gatekeeper warnings.

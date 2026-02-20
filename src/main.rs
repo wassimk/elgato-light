@@ -200,6 +200,9 @@ fn validate_temperature(s: &str) -> Result<u32, String> {
     version
 )]
 struct Cli {
+    #[arg(short = 'i', long, global = true, env = "ELGATO_LIGHT_IP", help = "IP address of the light (auto-discovered on macOS if omitted)")]
+    ip_address: Option<Ipv4Addr>,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -213,53 +216,26 @@ enum Command {
 
         #[arg(short, long, default_value = "5000", value_parser = validate_temperature, help = "Color temperature (2900-7000)")]
         temperature: u32,
-
-        #[arg(short = 'i', long, env = "ELGATO_LIGHT_IP", help = "IP address of the light (auto-discovered on macOS if omitted)")]
-        ip_address: Option<Ipv4Addr>,
     },
     /// Turn the light off
-    Off {
-        #[arg(short = 'i', long, env = "ELGATO_LIGHT_IP", help = "IP address of the light (auto-discovered on macOS if omitted)")]
-        ip_address: Option<Ipv4Addr>,
-    },
+    Off,
     /// Adjust brightness by a relative amount, e.g. 10 or -10
     Brightness {
         #[arg(help = "Relative adjustment (-100 to 100)", allow_hyphen_values = true)]
         brightness: i8,
-
-        #[arg(short = 'i', long, env = "ELGATO_LIGHT_IP", help = "IP address of the light (auto-discovered on macOS if omitted)")]
-        ip_address: Option<Ipv4Addr>,
     },
     /// Set the color temperature in Kelvin (2900-7000)
     Temperature {
         #[arg(value_parser = validate_temperature, help = "Temperature in Kelvin (2900-7000)")]
         temperature: u32,
-
-        #[arg(short = 'i', long, env = "ELGATO_LIGHT_IP", help = "IP address of the light (auto-discovered on macOS if omitted)")]
-        ip_address: Option<Ipv4Addr>,
     },
     /// Get the current status of the light
-    Status {
-        #[arg(short = 'i', long, env = "ELGATO_LIGHT_IP", help = "IP address of the light (auto-discovered on macOS if omitted)")]
-        ip_address: Option<Ipv4Addr>,
-    },
-}
-
-impl Command {
-    fn ip_address(&self) -> Option<Ipv4Addr> {
-        match self {
-            Command::On { ip_address, .. }
-            | Command::Off { ip_address }
-            | Command::Brightness { ip_address, .. }
-            | Command::Temperature { ip_address, .. }
-            | Command::Status { ip_address } => *ip_address,
-        }
-    }
+    Status,
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let target = resolve_target(cli.command.ip_address())?;
+    let target = resolve_target(cli.ip_address)?;
 
     match cli.command {
         Command::On {
@@ -281,7 +257,7 @@ fn main() -> Result<()> {
                 brightness, temperature
             );
         }
-        Command::Off { .. } => {
+        Command::Off => {
             let mut status = get_status(&target)?;
             let light = status
                 .lights
@@ -318,7 +294,7 @@ fn main() -> Result<()> {
             set_status(&target, &status)?;
             println!("Temperature: {}K", temperature);
         }
-        Command::Status { .. } => {
+        Command::Status => {
             let status = get_status(&target)?;
             let light = status
                 .lights

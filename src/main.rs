@@ -2,8 +2,9 @@ use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use std::net::Ipv4Addr;
+#[cfg(target_os = "macos")]
+use std::path::PathBuf;
 
-const DEFAULT_IP_ADDRESS: &str = "192.168.0.25";
 const LIGHT_PORT: u16 = 9123;
 
 // --- Elgato Light HTTP API ---
@@ -22,6 +23,11 @@ struct Light {
     temperature: u16,
 }
 
+struct LightTarget {
+    ip: Ipv4Addr,
+    port: u16,
+}
+
 fn kelvin_to_mireds(kelvin: u32) -> u16 {
     (1_000_000 / kelvin) as u16
 }
@@ -30,12 +36,12 @@ fn mireds_to_kelvin(mireds: u16) -> u32 {
     1_000_000 / mireds as u32
 }
 
-fn light_url(ip: Ipv4Addr) -> String {
-    format!("http://{}:{}/elgato/lights", ip, LIGHT_PORT)
+fn light_url(target: &LightTarget) -> String {
+    format!("http://{}:{}/elgato/lights", target.ip, target.port)
 }
 
-fn get_status(ip: Ipv4Addr) -> Result<LightStatus> {
-    let status: LightStatus = ureq::get(&light_url(ip))
+fn get_status(target: &LightTarget) -> Result<LightStatus> {
+    let status: LightStatus = ureq::get(&light_url(target))
         .call()
         .context("Failed to connect to light")?
         .into_json()
@@ -43,11 +49,133 @@ fn get_status(ip: Ipv4Addr) -> Result<LightStatus> {
     Ok(status)
 }
 
-fn set_status(ip: Ipv4Addr, status: &LightStatus) -> Result<()> {
-    ureq::put(&light_url(ip))
+fn set_status(target: &LightTarget, status: &LightStatus) -> Result<()> {
+    ureq::put(&light_url(target))
         .send_json(status)
         .context("Failed to send command to light")?;
     Ok(())
+}
+
+// --- Discovery ---
+
+fn resolve_target(ip: Option<Ipv4Addr>) -> Result<LightTarget> {
+    match ip {
+        Some(ip) => Ok(LightTarget {
+            ip,
+            port: LIGHT_PORT,
+        }),
+        None => resolve_target_no_ip(),
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn resolve_target_no_ip() -> Result<LightTarget> {
+    if let Some(cached) = read_cached_target() {
+        if get_status(&cached).is_ok() {
+            return Ok(cached);
+        }
+        clear_cached_target();
+        eprintln!("Cached light unreachable, rediscovering...");
+    }
+
+    let target = discover_light()?;
+    write_cached_target(&target);
+    Ok(target)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn resolve_target_no_ip() -> Result<LightTarget> {
+    Err(anyhow!(
+        "No IP address specified.\n\
+         Use --ip-address <IP> or set the ELGATO_LIGHT_IP environment variable."
+    ))
+}
+
+// --- Cache ---
+
+#[cfg(target_os = "macos")]
+fn cache_path() -> Option<PathBuf> {
+    std::env::var("HOME")
+        .ok()
+        .map(|home| PathBuf::from(home).join("Library/Caches/elgato-light/target"))
+}
+
+#[cfg(target_os = "macos")]
+fn read_cached_target() -> Option<LightTarget> {
+    let content = std::fs::read_to_string(cache_path()?).ok()?;
+    let mut parts = content.trim().splitn(2, ':');
+    let ip = parts.next()?.parse().ok()?;
+    let port = parts.next()?.parse().ok()?;
+    Some(LightTarget { ip, port })
+}
+
+#[cfg(target_os = "macos")]
+fn write_cached_target(target: &LightTarget) {
+    if let Some(path) = cache_path() {
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::write(path, format!("{}:{}", target.ip, target.port));
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn clear_cached_target() {
+    if let Some(path) = cache_path() {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn discover_light() -> Result<LightTarget> {
+    use mdns_sd::{ServiceDaemon, ServiceEvent};
+    use std::time::{Duration, Instant};
+
+    const SERVICE_TYPE: &str = "_elg._tcp.local.";
+    const DISCOVERY_TIMEOUT: Duration = Duration::from_secs(5);
+
+    eprintln!("Discovering Elgato lights on the network...");
+
+    let mdns = ServiceDaemon::new().context("Failed to start mDNS daemon")?;
+    let receiver = mdns
+        .browse(SERVICE_TYPE)
+        .context("Failed to browse for Elgato lights")?;
+    let deadline = Instant::now() + DISCOVERY_TIMEOUT;
+
+    while let Ok(event) = receiver.recv_deadline(deadline) {
+        if let ServiceEvent::ServiceResolved(info) = event {
+            let valid_ip = info
+                .get_addresses_v4()
+                .into_iter()
+                .find(|v4| !v4.is_loopback() && !v4.is_unspecified());
+
+            if let Some(ip) = valid_ip {
+                let target = LightTarget {
+                    ip,
+                    port: info.get_port(),
+                };
+                eprintln!(
+                    "Found: {} ({}:{})",
+                    info.get_fullname(),
+                    target.ip,
+                    target.port
+                );
+                let _ = mdns.stop_browse(SERVICE_TYPE);
+                let _ = mdns.shutdown();
+                return Ok(target);
+            }
+        }
+    }
+
+    let _ = mdns.stop_browse(SERVICE_TYPE);
+    let _ = mdns.shutdown();
+
+    Err(anyhow!(
+        "No Elgato light found on the network within {}s.\n\
+         Make sure the light is powered on and connected to the same network.\n\
+         Alternatively, specify the IP with: --ip-address <IP>",
+        DISCOVERY_TIMEOUT.as_secs()
+    ))
 }
 
 // --- CLI ---
@@ -68,7 +196,7 @@ fn validate_temperature(s: &str) -> Result<u32, String> {
 #[derive(Parser, Debug)]
 #[command(
     name = "elgato-light",
-    about = "A CLI for controlling an Elgato light by IP address",
+    about = "A CLI for controlling an Elgato light (auto-discovers via Bonjour on macOS)",
     version
 )]
 struct Cli {
@@ -86,39 +214,39 @@ enum Command {
         #[arg(short, long, default_value = "5000", value_parser = validate_temperature, help = "Color temperature (2900-7000)")]
         temperature: u32,
 
-        #[arg(short = 'i', long, env = "ELGATO_LIGHT_IP", default_value = DEFAULT_IP_ADDRESS)]
-        ip_address: Ipv4Addr,
+        #[arg(short = 'i', long, env = "ELGATO_LIGHT_IP", help = "IP address of the light (auto-discovered on macOS if omitted)")]
+        ip_address: Option<Ipv4Addr>,
     },
     /// Turn the light off
     Off {
-        #[arg(short = 'i', long, env = "ELGATO_LIGHT_IP", default_value = DEFAULT_IP_ADDRESS)]
-        ip_address: Ipv4Addr,
+        #[arg(short = 'i', long, env = "ELGATO_LIGHT_IP", help = "IP address of the light (auto-discovered on macOS if omitted)")]
+        ip_address: Option<Ipv4Addr>,
     },
     /// Adjust brightness by a relative amount, e.g. 10 or -10
     Brightness {
         #[arg(help = "Relative adjustment (-100 to 100)", allow_hyphen_values = true)]
         brightness: i8,
 
-        #[arg(short = 'i', long, env = "ELGATO_LIGHT_IP", default_value = DEFAULT_IP_ADDRESS)]
-        ip_address: Ipv4Addr,
+        #[arg(short = 'i', long, env = "ELGATO_LIGHT_IP", help = "IP address of the light (auto-discovered on macOS if omitted)")]
+        ip_address: Option<Ipv4Addr>,
     },
     /// Set the color temperature in Kelvin (2900-7000)
     Temperature {
         #[arg(value_parser = validate_temperature, help = "Temperature in Kelvin (2900-7000)")]
         temperature: u32,
 
-        #[arg(short = 'i', long, env = "ELGATO_LIGHT_IP", default_value = DEFAULT_IP_ADDRESS)]
-        ip_address: Ipv4Addr,
+        #[arg(short = 'i', long, env = "ELGATO_LIGHT_IP", help = "IP address of the light (auto-discovered on macOS if omitted)")]
+        ip_address: Option<Ipv4Addr>,
     },
     /// Get the current status of the light
     Status {
-        #[arg(short = 'i', long, env = "ELGATO_LIGHT_IP", default_value = DEFAULT_IP_ADDRESS)]
-        ip_address: Ipv4Addr,
+        #[arg(short = 'i', long, env = "ELGATO_LIGHT_IP", help = "IP address of the light (auto-discovered on macOS if omitted)")]
+        ip_address: Option<Ipv4Addr>,
     },
 }
 
 impl Command {
-    fn ip_address(&self) -> Ipv4Addr {
+    fn ip_address(&self) -> Option<Ipv4Addr> {
         match self {
             Command::On { ip_address, .. }
             | Command::Off { ip_address }
@@ -131,7 +259,7 @@ impl Command {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let ip = cli.command.ip_address();
+    let target = resolve_target(cli.command.ip_address())?;
 
     match cli.command {
         Command::On {
@@ -147,24 +275,24 @@ fn main() -> Result<()> {
                     temperature: kelvin_to_mireds(temperature),
                 }],
             };
-            set_status(ip, &status)?;
+            set_status(&target, &status)?;
             println!(
                 "Light on (brightness: {}%, temperature: {}K)",
                 brightness, temperature
             );
         }
         Command::Off { .. } => {
-            let mut status = get_status(ip)?;
+            let mut status = get_status(&target)?;
             let light = status
                 .lights
                 .first_mut()
                 .ok_or_else(|| anyhow!("No lights found in response"))?;
             light.on = 0;
-            set_status(ip, &status)?;
+            set_status(&target, &status)?;
             println!("Light off");
         }
         Command::Brightness { brightness, .. } => {
-            let mut status = get_status(ip)?;
+            let mut status = get_status(&target)?;
             let light = status
                 .lights
                 .first_mut()
@@ -174,11 +302,11 @@ fn main() -> Result<()> {
             }
             let new_brightness = (light.brightness as i16 + brightness as i16).clamp(0, 100) as u8;
             light.brightness = new_brightness;
-            set_status(ip, &status)?;
+            set_status(&target, &status)?;
             println!("Brightness: {}%", new_brightness);
         }
         Command::Temperature { temperature, .. } => {
-            let mut status = get_status(ip)?;
+            let mut status = get_status(&target)?;
             let light = status
                 .lights
                 .first_mut()
@@ -187,11 +315,11 @@ fn main() -> Result<()> {
                 light.on = 1;
             }
             light.temperature = kelvin_to_mireds(temperature);
-            set_status(ip, &status)?;
+            set_status(&target, &status)?;
             println!("Temperature: {}K", temperature);
         }
         Command::Status { .. } => {
-            let status = get_status(ip)?;
+            let status = get_status(&target)?;
             let light = status
                 .lights
                 .first()

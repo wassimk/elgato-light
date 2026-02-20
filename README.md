@@ -2,7 +2,7 @@
 
 A CLI tool for controlling Elgato lights.
 
-On macOS, lights are automatically discovered via Bonjour with support for multiple lights. On Linux, an IP address must be provided. This tool can be used stand-alone, but it was designed primarily for use within an extension with [Raycast](https://www.raycast.com) on macOS. That extension is available in the [raycast-elgato-light](https://github.com/wassimk/raycast-elgato-light) repository.
+On macOS, lights are automatically discovered via Bonjour with support for multiple lights. On Linux, an IP address must be provided.
 
 ### Features
 
@@ -131,3 +131,8 @@ elgato-light clear-cache
 The discovery cache is stored at `~/Library/Caches/elgato-light/target`.
 
 The Apple binaries are signed and notarized with an Apple Developer account, so they should work without any Gatekeeper warnings.
+
+### Related Projects
+
+- [elgato-autolight](https://github.com/wassimk/elgato-autolight) - A macOS automation tool that watches for camera activation and automatically turns your Elgato lights on and off. Uses `elgato-light` under the hood.
+- [raycast-elgato-light](https://github.com/wassimk/raycast-elgato-light) - A [Raycast](https://www.raycast.com) extension for controlling Elgato lights on macOS.

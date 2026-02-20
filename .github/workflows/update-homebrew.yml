@@ -1,0 +1,103 @@
+name: update-homebrew
+
+on:
+  workflow_run:
+    workflows: [release]
+    types: [completed]
+
+jobs:
+  update-formula:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get release version
+        id: version
+        run: |
+          TAG=$(gh release view --repo wassimk/elgato-light --json tagName -q '.tagName')
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download SHA-256 checksums
+        run: |
+          gh release download "${{ steps.version.outputs.tag }}" \
+            --repo wassimk/elgato-light \
+            --pattern '*-sha.txt' \
+            --dir checksums
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Parse checksums
+        id: shas
+        run: |
+          for file in checksums/*-sha.txt; do
+            SHA=$(awk '{print $1}' "$file")
+            NAME=$(basename "$file" -sha.txt)
+
+            case "$NAME" in
+              elgato-light-Darwin-aarch64.tar.gz) echo "darwin_arm64=$SHA" >> "$GITHUB_OUTPUT" ;;
+              elgato-light-Darwin-x86_64.tar.gz)  echo "darwin_x86_64=$SHA" >> "$GITHUB_OUTPUT" ;;
+              elgato-light-Linux-aarch64.tar.gz)  echo "linux_arm64=$SHA" >> "$GITHUB_OUTPUT" ;;
+              elgato-light-Linux-x86_64.tar.gz)   echo "linux_x86_64=$SHA" >> "$GITHUB_OUTPUT" ;;
+            esac
+          done
+
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v4
+        with:
+          repository: wassimk/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Update formula
+        run: |
+          cat > Formula/elgato-light.rb << 'RUBY'
+          class ElgatoLight < Formula
+            desc "CLI to control Elgato Key Light and Key Light Air devices"
+            homepage "https://github.com/wassimk/elgato-light"
+            version "${{ steps.version.outputs.version }}"
+            license "MIT"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/wassimk/elgato-light/releases/download/v#{version}/elgato-light-Darwin-aarch64.tar.gz"
+                sha256 "${{ steps.shas.outputs.darwin_arm64 }}"
+              elsif Hardware::CPU.intel?
+                url "https://github.com/wassimk/elgato-light/releases/download/v#{version}/elgato-light-Darwin-x86_64.tar.gz"
+                sha256 "${{ steps.shas.outputs.darwin_x86_64 }}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+                url "https://github.com/wassimk/elgato-light/releases/download/v#{version}/elgato-light-Linux-aarch64.tar.gz"
+                sha256 "${{ steps.shas.outputs.linux_arm64 }}"
+              elsif Hardware::CPU.intel?
+                url "https://github.com/wassimk/elgato-light/releases/download/v#{version}/elgato-light-Linux-x86_64.tar.gz"
+                sha256 "${{ steps.shas.outputs.linux_x86_64 }}"
+              end
+            end
+
+            def install
+              bin.install "elgato-light"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/elgato-light --version")
+            end
+          end
+          RUBY
+
+      - name: Remove leading whitespace from formula
+        run: sed -i 's/^          //' Formula/elgato-light.rb
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/elgato-light.rb
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+          git commit -m "feat: update elgato-light to ${{ steps.version.outputs.version }}"
+          git push

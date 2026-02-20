@@ -78,7 +78,7 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// Turn the light on with specified brightness and temperature
+    /// Turn the light on (use -b and -t to set brightness and temperature)
     On {
         #[arg(short, long, default_value = "10", value_parser = clap::value_parser!(u8).range(0..=100), help = "Brightness level (0-100)")]
         brightness: u8,
@@ -94,17 +94,17 @@ enum Command {
         #[arg(short = 'i', long, env = "ELGATO_LIGHT_IP", default_value = DEFAULT_IP_ADDRESS)]
         ip_address: Ipv4Addr,
     },
-    /// Change the brightness relatively. Use -- to pass negative values.
+    /// Adjust brightness by a relative amount, e.g. 10 or -10
     Brightness {
-        #[arg(help = "Brightness change (-100 to 100)", allow_hyphen_values = true)]
+        #[arg(help = "Relative adjustment (-100 to 100)", allow_hyphen_values = true)]
         brightness: i8,
 
         #[arg(short = 'i', long, env = "ELGATO_LIGHT_IP", default_value = DEFAULT_IP_ADDRESS)]
         ip_address: Ipv4Addr,
     },
-    /// Set the color temperature
+    /// Set the color temperature in Kelvin (2900-7000)
     Temperature {
-        #[arg(value_parser = validate_temperature, help = "Color temperature (2900-7000)")]
+        #[arg(value_parser = validate_temperature, help = "Temperature in Kelvin (2900-7000)")]
         temperature: u32,
 
         #[arg(short = 'i', long, env = "ELGATO_LIGHT_IP", default_value = DEFAULT_IP_ADDRESS)]

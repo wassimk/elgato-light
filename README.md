@@ -98,7 +98,7 @@ On Linux, or to skip auto-discovery on macOS, provide the light's IP address dir
 
 ```shell
 elgato-light --ip-address 192.168.0.10 on
-elgato-light -i 192.168.0.10,192.168.0.11 on
+elgato-light --ip-address 192.168.0.10,192.168.0.11 on
 ```
 
 The `ELGATO_LIGHT_IP` environment variable can be set as an alternative to passing `--ip-address` on every command.

@@ -24,6 +24,7 @@ struct Light {
 }
 
 struct LightTarget {
+    name: String,
     ip: Ipv4Addr,
     port: u16,
 }
@@ -43,48 +44,86 @@ fn light_url(target: &LightTarget) -> String {
 fn get_status(target: &LightTarget) -> Result<LightStatus> {
     let status: LightStatus = ureq::get(&light_url(target))
         .call()
-        .context("Failed to connect to light")?
+        .with_context(|| format!("Failed to connect to light '{}'", target.name))?
         .into_json()
-        .context("Failed to parse light status")?;
+        .with_context(|| format!("Failed to parse status from light '{}'", target.name))?;
     Ok(status)
 }
 
 fn set_status(target: &LightTarget, status: &LightStatus) -> Result<()> {
     ureq::put(&light_url(target))
         .send_json(status)
-        .context("Failed to send command to light")?;
+        .with_context(|| format!("Failed to send command to light '{}'", target.name))?;
     Ok(())
 }
 
 // --- Discovery ---
 
-fn resolve_target(ip: Option<Ipv4Addr>) -> Result<LightTarget> {
-    match ip {
-        Some(ip) => Ok(LightTarget {
-            ip,
-            port: LIGHT_PORT,
-        }),
-        None => resolve_target_no_ip(),
+fn parse_ips(s: &str) -> Result<Vec<Ipv4Addr>> {
+    s.split(',')
+        .map(|part| {
+            part.trim()
+                .parse::<Ipv4Addr>()
+                .with_context(|| format!("'{}' is not a valid IPv4 address", part.trim()))
+        })
+        .collect()
+}
+
+fn resolve_targets(ip_str: Option<&str>, light_filter: Option<&str>, timeout_secs: u64) -> Result<Vec<LightTarget>> {
+    if ip_str.is_some() && light_filter.is_some() {
+        return Err(anyhow!("Cannot use --ip-address and --light together"));
+    }
+
+    match ip_str {
+        Some(s) => {
+            let ips = parse_ips(s)?;
+            Ok(ips
+                .into_iter()
+                .map(|ip| LightTarget {
+                    name: ip.to_string(),
+                    ip,
+                    port: LIGHT_PORT,
+                })
+                .collect())
+        }
+        None => {
+            let targets = resolve_targets_no_ip(timeout_secs)?;
+            match light_filter {
+                Some(filter) => {
+                    let filter_lower = filter.to_lowercase();
+                    let filtered: Vec<_> = targets
+                        .into_iter()
+                        .filter(|t| t.name.to_lowercase().contains(&filter_lower))
+                        .collect();
+                    if filtered.is_empty() {
+                        Err(anyhow!(
+                            "No light found matching '{}'. Use 'discover' to see available lights.",
+                            filter
+                        ))
+                    } else {
+                        Ok(filtered)
+                    }
+                }
+                None => Ok(targets),
+            }
+        }
     }
 }
 
 #[cfg(target_os = "macos")]
-fn resolve_target_no_ip() -> Result<LightTarget> {
-    if let Some(cached) = read_cached_target() {
-        if get_status(&cached).is_ok() {
-            return Ok(cached);
-        }
-        clear_cached_target();
-        eprintln!("Cached light unreachable, rediscovering...");
+fn resolve_targets_no_ip(timeout_secs: u64) -> Result<Vec<LightTarget>> {
+    if let Some(cached) = read_cached_targets() {
+        return Ok(cached);
     }
 
-    let target = discover_light()?;
-    write_cached_target(&target);
-    Ok(target)
+    eprintln!("No saved lights, discovering...");
+    let targets = discover_lights(timeout_secs)?;
+    write_cached_targets(&targets);
+    Ok(targets)
 }
 
 #[cfg(not(target_os = "macos"))]
-fn resolve_target_no_ip() -> Result<LightTarget> {
+fn resolve_targets_no_ip(_timeout_secs: u64) -> Result<Vec<LightTarget>> {
     Err(anyhow!(
         "No IP address specified.\n\
          Use --ip-address <IP> or set the ELGATO_LIGHT_IP environment variable."
@@ -94,6 +133,14 @@ fn resolve_target_no_ip() -> Result<LightTarget> {
 // --- Cache ---
 
 #[cfg(target_os = "macos")]
+#[derive(Debug, Serialize, Deserialize)]
+struct CachedLight {
+    name: String,
+    ip: String,
+    port: u16,
+}
+
+#[cfg(target_os = "macos")]
 fn cache_path() -> Option<PathBuf> {
     std::env::var("HOME")
         .ok()
@@ -101,38 +148,75 @@ fn cache_path() -> Option<PathBuf> {
 }
 
 #[cfg(target_os = "macos")]
-fn read_cached_target() -> Option<LightTarget> {
+fn read_cached_targets() -> Option<Vec<LightTarget>> {
     let content = std::fs::read_to_string(cache_path()?).ok()?;
-    let mut parts = content.trim().splitn(2, ':');
-    let ip = parts.next()?.parse().ok()?;
-    let port = parts.next()?.parse().ok()?;
-    Some(LightTarget { ip, port })
-}
-
-#[cfg(target_os = "macos")]
-fn write_cached_target(target: &LightTarget) {
-    if let Some(path) = cache_path() {
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        let _ = std::fs::write(path, format!("{}:{}", target.ip, target.port));
+    let cached: Vec<CachedLight> = serde_json::from_str(&content).ok()?;
+    if cached.is_empty() {
+        return None;
+    }
+    let targets: Vec<LightTarget> = cached
+        .into_iter()
+        .filter_map(|c| {
+            let ip = c.ip.parse().ok()?;
+            Some(LightTarget {
+                name: c.name,
+                ip,
+                port: c.port,
+            })
+        })
+        .collect();
+    if targets.is_empty() {
+        None
+    } else {
+        Some(targets)
     }
 }
 
 #[cfg(target_os = "macos")]
-fn clear_cached_target() {
+fn write_cached_targets(targets: &[LightTarget]) {
+    if let Some(path) = cache_path() {
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let cached: Vec<CachedLight> = targets
+            .iter()
+            .map(|t| CachedLight {
+                name: t.name.clone(),
+                ip: t.ip.to_string(),
+                port: t.port,
+            })
+            .collect();
+        if let Ok(json) = serde_json::to_string_pretty(&cached) {
+            let _ = std::fs::write(path, json);
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn clear_cached_targets() {
     if let Some(path) = cache_path() {
         let _ = std::fs::remove_file(path);
     }
 }
 
+// --- mDNS Discovery ---
+
 #[cfg(target_os = "macos")]
-fn discover_light() -> Result<LightTarget> {
+fn extract_light_name(fullname: &str) -> String {
+    fullname
+        .strip_suffix("._elg._tcp.local.")
+        .unwrap_or(fullname)
+        .to_string()
+}
+
+#[cfg(target_os = "macos")]
+fn discover_lights(timeout_secs: u64) -> Result<Vec<LightTarget>> {
     use mdns_sd::{ServiceDaemon, ServiceEvent};
     use std::time::{Duration, Instant};
 
     const SERVICE_TYPE: &str = "_elg._tcp.local.";
-    const DISCOVERY_TIMEOUT: Duration = Duration::from_secs(5);
+
+    let timeout = Duration::from_secs(timeout_secs);
 
     eprintln!("Discovering Elgato lights on the network...");
 
@@ -140,7 +224,9 @@ fn discover_light() -> Result<LightTarget> {
     let receiver = mdns
         .browse(SERVICE_TYPE)
         .context("Failed to browse for Elgato lights")?;
-    let deadline = Instant::now() + DISCOVERY_TIMEOUT;
+    let deadline = Instant::now() + timeout;
+
+    let mut targets = Vec::new();
 
     while let Ok(event) = receiver.recv_deadline(deadline) {
         if let ServiceEvent::ServiceResolved(info) = event {
@@ -150,19 +236,14 @@ fn discover_light() -> Result<LightTarget> {
                 .find(|v4| !v4.is_loopback() && !v4.is_unspecified());
 
             if let Some(ip) = valid_ip {
+                let name = extract_light_name(info.get_fullname());
                 let target = LightTarget {
+                    name,
                     ip,
                     port: info.get_port(),
                 };
-                eprintln!(
-                    "Found: {} ({}:{})",
-                    info.get_fullname(),
-                    target.ip,
-                    target.port
-                );
-                let _ = mdns.stop_browse(SERVICE_TYPE);
-                let _ = mdns.shutdown();
-                return Ok(target);
+                eprintln!("  Found: {} ({}:{})", target.name, target.ip, target.port);
+                targets.push(target);
             }
         }
     }
@@ -170,12 +251,17 @@ fn discover_light() -> Result<LightTarget> {
     let _ = mdns.stop_browse(SERVICE_TYPE);
     let _ = mdns.shutdown();
 
-    Err(anyhow!(
-        "No Elgato light found on the network within {}s.\n\
-         Make sure the light is powered on and connected to the same network.\n\
-         Alternatively, specify the IP with: --ip-address <IP>",
-        DISCOVERY_TIMEOUT.as_secs()
-    ))
+    if targets.is_empty() {
+        Err(anyhow!(
+            "No Elgato lights found on the network within {}s.\n\
+             Make sure your lights are powered on and connected to the same network.\n\
+             Alternatively, specify IP(s) with: --ip-address <IP>",
+            timeout.as_secs()
+        ))
+    } else {
+        targets.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(targets)
+    }
 }
 
 // --- CLI ---
@@ -196,12 +282,21 @@ fn validate_temperature(s: &str) -> Result<u32, String> {
 #[derive(Parser, Debug)]
 #[command(
     name = "elgato-light",
-    about = "A CLI for controlling an Elgato light (auto-discovers via Bonjour on macOS)",
+    about = "A CLI for controlling Elgato lights (auto-discovers via Bonjour on macOS)",
     version
 )]
 struct Cli {
-    #[arg(short = 'i', long, global = true, env = "ELGATO_LIGHT_IP", help = "IP address of the light (auto-discovered on macOS if omitted)")]
-    ip_address: Option<Ipv4Addr>,
+    #[arg(short = 'i', long, global = true, env = "ELGATO_LIGHT_IP",
+           help = "Light IP address(es), comma-separated")]
+    ip_address: Option<String>,
+
+    #[arg(short = 'l', long, global = true,
+           help = "Target a specific light by name (case-insensitive substring match)")]
+    light: Option<String>,
+
+    #[arg(long, global = true, default_value = "10",
+           help = "Discovery timeout in seconds")]
+    timeout: u64,
 
     #[command(subcommand)]
     command: Command,
@@ -209,7 +304,7 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// Turn the light on (use -b and -t to set brightness and temperature)
+    /// Turn the light(s) on (use -b and -t to set brightness and temperature)
     On {
         #[arg(short, long, default_value = "10", value_parser = clap::value_parser!(u8).range(0..=100), help = "Brightness level (0-100)")]
         brightness: u8,
@@ -217,7 +312,7 @@ enum Command {
         #[arg(short, long, default_value = "5000", value_parser = validate_temperature, help = "Color temperature (2900-7000)")]
         temperature: u32,
     },
-    /// Turn the light off
+    /// Turn the light(s) off
     Off,
     /// Adjust brightness by a relative amount, e.g. 10 or -10
     Brightness {
@@ -229,85 +324,172 @@ enum Command {
         #[arg(value_parser = validate_temperature, help = "Temperature in Kelvin (2900-7000)")]
         temperature: u32,
     },
-    /// Get the current status of the light
+    /// Get the current status of the light(s)
     Status,
+    /// Discover lights on the network and save for future use
+    Discover,
+    /// Clear the saved lights cache
+    ClearCache,
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let target = resolve_target(cli.ip_address)?;
+
+    if matches!(cli.command, Command::Discover) {
+        return run_discover(cli.timeout);
+    }
+
+    if matches!(cli.command, Command::ClearCache) {
+        return run_clear_cache();
+    }
+
+    let targets = resolve_targets(cli.ip_address.as_deref(), cli.light.as_deref(), cli.timeout)?;
+    let multi = targets.len() > 1;
 
     match cli.command {
         Command::On {
             brightness,
             temperature,
-            ..
         } => {
-            let status = LightStatus {
-                number_of_lights: 1,
-                lights: vec![Light {
-                    on: 1,
-                    brightness,
-                    temperature: kelvin_to_mireds(temperature),
-                }],
-            };
-            set_status(&target, &status)?;
+            for target in &targets {
+                let status = LightStatus {
+                    number_of_lights: 1,
+                    lights: vec![Light {
+                        on: 1,
+                        brightness,
+                        temperature: kelvin_to_mireds(temperature),
+                    }],
+                };
+                set_status(target, &status)?;
+            }
             println!(
-                "Light on (brightness: {}%, temperature: {}K)",
-                brightness, temperature
+                "Light on (brightness: {}%, temperature: {}K){}",
+                brightness,
+                temperature,
+                if multi {
+                    format!(" [{} lights]", targets.len())
+                } else {
+                    String::new()
+                }
             );
         }
         Command::Off => {
-            let mut status = get_status(&target)?;
-            let light = status
-                .lights
-                .first_mut()
-                .ok_or_else(|| anyhow!("No lights found in response"))?;
-            light.on = 0;
-            set_status(&target, &status)?;
-            println!("Light off");
-        }
-        Command::Brightness { brightness, .. } => {
-            let mut status = get_status(&target)?;
-            let light = status
-                .lights
-                .first_mut()
-                .ok_or_else(|| anyhow!("No lights found in response"))?;
-            if light.on == 0 {
-                light.on = 1;
+            for target in &targets {
+                let mut status = get_status(target)?;
+                let light = status
+                    .lights
+                    .first_mut()
+                    .ok_or_else(|| anyhow!("No lights in response from '{}'", target.name))?;
+                light.on = 0;
+                set_status(target, &status)?;
             }
-            let new_brightness = (light.brightness as i16 + brightness as i16).clamp(0, 100) as u8;
-            light.brightness = new_brightness;
-            set_status(&target, &status)?;
-            println!("Brightness: {}%", new_brightness);
+            println!(
+                "Light off{}",
+                if multi {
+                    format!(" [{} lights]", targets.len())
+                } else {
+                    String::new()
+                }
+            );
         }
-        Command::Temperature { temperature, .. } => {
-            let mut status = get_status(&target)?;
-            let light = status
-                .lights
-                .first_mut()
-                .ok_or_else(|| anyhow!("No lights found in response"))?;
-            if light.on == 0 {
-                light.on = 1;
+        Command::Brightness { brightness } => {
+            for target in &targets {
+                let mut status = get_status(target)?;
+                let light = status
+                    .lights
+                    .first_mut()
+                    .ok_or_else(|| anyhow!("No lights in response from '{}'", target.name))?;
+                if light.on == 0 {
+                    light.on = 1;
+                }
+                let new_brightness =
+                    (light.brightness as i16 + brightness as i16).clamp(0, 100) as u8;
+                light.brightness = new_brightness;
+                set_status(target, &status)?;
+                if multi {
+                    println!("{}: brightness {}%", target.name, new_brightness);
+                } else {
+                    println!("Brightness: {}%", new_brightness);
+                }
             }
-            light.temperature = kelvin_to_mireds(temperature);
-            set_status(&target, &status)?;
-            println!("Temperature: {}K", temperature);
+        }
+        Command::Temperature { temperature } => {
+            for target in &targets {
+                let mut status = get_status(target)?;
+                let light = status
+                    .lights
+                    .first_mut()
+                    .ok_or_else(|| anyhow!("No lights in response from '{}'", target.name))?;
+                if light.on == 0 {
+                    light.on = 1;
+                }
+                light.temperature = kelvin_to_mireds(temperature);
+                set_status(target, &status)?;
+            }
+            println!(
+                "Temperature: {}K{}",
+                temperature,
+                if multi {
+                    format!(" [{} lights]", targets.len())
+                } else {
+                    String::new()
+                }
+            );
         }
         Command::Status => {
-            let status = get_status(&target)?;
-            let light = status
-                .lights
-                .first()
-                .ok_or_else(|| anyhow!("No lights found in response"))?;
-            println!(
-                "Power:       {}",
-                if light.on == 1 { "On" } else { "Off" }
-            );
-            println!("Brightness:  {}%", light.brightness);
-            println!("Temperature: {}K", mireds_to_kelvin(light.temperature));
+            for (i, target) in targets.iter().enumerate() {
+                if i > 0 {
+                    println!();
+                }
+                let status = get_status(target)?;
+                let light = status
+                    .lights
+                    .first()
+                    .ok_or_else(|| anyhow!("No lights in response from '{}'", target.name))?;
+                println!("Name:        {}", target.name);
+                println!(
+                    "Power:       {}",
+                    if light.on == 1 { "On" } else { "Off" }
+                );
+                println!("Brightness:  {}%", light.brightness);
+                println!("Temperature: {}K", mireds_to_kelvin(light.temperature));
+            }
         }
+        Command::Discover | Command::ClearCache => unreachable!(),
     }
 
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn run_discover(timeout_secs: u64) -> Result<()> {
+    clear_cached_targets();
+    let targets = discover_lights(timeout_secs)?;
+    write_cached_targets(&targets);
+    println!("Found {} light(s):", targets.len());
+    for target in &targets {
+        println!("  {} ({}:{})", target.name, target.ip, target.port);
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn run_discover(_timeout_secs: u64) -> Result<()> {
+    Err(anyhow!(
+        "Discovery requires macOS with Bonjour.\n\
+         Use --ip-address <IP> to specify light(s) directly."
+    ))
+}
+
+#[cfg(target_os = "macos")]
+fn run_clear_cache() -> Result<()> {
+    clear_cached_targets();
+    println!("Saved lights cache cleared.");
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn run_clear_cache() -> Result<()> {
+    println!("No cache to clear (discovery is macOS only).");
     Ok(())
 }

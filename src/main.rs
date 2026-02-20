@@ -83,7 +83,7 @@ enum Command {
         #[arg(short, long, default_value = "10", value_parser = clap::value_parser!(u8).range(0..=100), help = "Brightness level (0-100)")]
         brightness: u8,
 
-        #[arg(short, long, default_value = "3000", value_parser = validate_temperature, help = "Color temperature (2900-7000)")]
+        #[arg(short, long, default_value = "5000", value_parser = validate_temperature, help = "Color temperature (2900-7000)")]
         temperature: u32,
 
         #[arg(short = 'i', long, env = "ELGATO_LIGHT_IP", default_value = DEFAULT_IP_ADDRESS)]

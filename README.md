@@ -4,7 +4,7 @@ A CLI tool for controlling Elgato lights.
 
 On macOS, lights are automatically discovered via Bonjour with support for multiple lights. On Linux, an IP address must be provided.
 
-### Features
+## ✨ Features
 
 - **Multi-light support** with automatic discovery of all lights on the network
 - **Auto-discovery** on macOS via Bonjour/mDNS, no configuration needed
@@ -15,7 +15,7 @@ On macOS, lights are automatically discovered via Bonjour with support for multi
 - **Color temperature** control in Kelvin (2900K to 7000K)
 - **Status** reporting of current light state with light name
 
-### Usage
+## 💻 Usage
 
 ```
 $ elgato-light --help
@@ -108,7 +108,7 @@ export ELGATO_LIGHT_IP=192.168.0.10,192.168.0.11
 elgato-light on
 ```
 
-### Troubleshooting
+## 🔧 Troubleshooting
 
 If auto-discovery is not finding your light, verify Bonjour can see it with the macOS built-in tool.
 
@@ -132,7 +132,7 @@ The discovery cache is stored at `~/Library/Caches/elgato-light/target`.
 
 The Apple binaries are signed and notarized with an Apple Developer account, so they should work without any Gatekeeper warnings.
 
-### Related Projects
+## 🔗 Related Projects
 
 - [elgato-autolight](https://github.com/wassimk/elgato-autolight) - A macOS automation tool that watches for camera activation and automatically turns your Elgato lights on and off. Uses `elgato-light` under the hood.
 - [raycast-elgato-light](https://github.com/wassimk/raycast-elgato-light) - A [Raycast](https://www.raycast.com) extension for controlling Elgato lights on macOS.

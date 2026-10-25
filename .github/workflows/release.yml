@@ -75,7 +75,6 @@ jobs:
 
       - name: Notarize binary
         if: runner.os == 'macOS'
-        continue-on-error: true
         timeout-minutes: 15
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}

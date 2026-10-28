@@ -2,6 +2,8 @@
 
 A CLI tool for controlling Elgato lights.
 
+![elgato-light demo](demo/elgato-light.gif)
+
 On macOS, lights are automatically discovered via Bonjour with support for multiple lights. On Linux, an IP address must be provided.
 
 ## ✨ Features
